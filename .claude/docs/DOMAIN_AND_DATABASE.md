@@ -1,136 +1,216 @@
-# PersonalHub — Domínio e modelagem inicial do banco
+# PersonalHub — Domínio e modelo do banco
 
 ## 1. Objetivo
 
-Este documento apresenta uma proposta inicial de entidades e relações para discussão. Não executar migrations nem cristalizar o modelo antes de validar as regras marcadas como **A DEFINIR**.
+Este documento descreve o modelo de dados aprovado em 2026-11-03 (D-029), com base nas decisões D-015 a D-028 de `DECISIONS.md`. Qualquer mudança no modelo deve ser registrada como nova decisão.
 
-Banco: PostgreSQL. ORM sugerido: Entity Framework Core com provider Npgsql compatível com .NET 10.
+Banco: PostgreSQL. ORM: Entity Framework Core com provider Npgsql compatível com .NET 10.
 
 ## 2. Princípios de modelagem
-- Usar chaves primárias UUID (`uuid`) para entidades de negócio expostas por APIs/rotas.
-- Datas armazenadas em UTC (`timestamp with time zone` no PostgreSQL) e convertidas para o fuso definido pelo produto na apresentação e no cálculo de vencimento.
-- Valores monetários com `numeric(12,2)` e moeda BRL explicitada no domínio; nunca usar `float`/`double` para dinheiro.
-- Definir precisão e escala após confirmar limites comerciais.
-- Usar exclusão lógica/auditoria para registros com relevância histórica.
-- Criar índices para consultas por proprietário, aluno, período e estado.
-- Aplicar restrições de integridade no banco sempre que possível.
-- Evitar duplicar dados pessoais sem necessidade.
-- Não armazenar dados de cartão ou credenciais de pagamento no MVP.
+- Chaves primárias UUID (`uuid`) em todas as entidades de negócio.
+- Instantes em UTC (`timestamptz`); datas de período e vencimento em `date` no fuso `America/Sao_Paulo` (D-026).
+- Valores monetários com `numeric(12,2)` em BRL; nunca usar `float`/`double` para dinheiro.
+- Concorrência otimista pela coluna de sistema `xmin` do PostgreSQL (sem coluna extra).
+- Exclusão lógica e auditoria para registros com relevância histórica.
+- Toda tabela de domínio tem `CreatedAtUtc` (omitida nas tabelas abaixo).
+- Índices para consultas por proprietário, aluno, período e estado.
+- Restrições de integridade no banco sempre que possível.
+- Não armazenar CPF (D-017) nem dados de cartão ou credenciais de pagamento no MVP.
 
-## 3. Entidades propostas
+## 3. Visão geral
 
-### 3.1 User / Identity
-Usar ASP.NET Core Identity (ou alternativa aprovada) para identidade e autenticação.
-Campos conceituais:
-- Id
-- UserName / Email normalizado
-- PasswordHash gerenciado pelo Identity
-- PhoneNumber
-- PhoneNumberConfirmed
-- Lockout e campos de segurança do Identity
+Tudo pende do vínculo `PersonalStudent`: aulas, demonstrativos e pagamentos pertencem a um par personal–aluno, o que torna a checagem de autorização uma única junção.
 
-Não criar tabela de senha própria. Perfis e autorização devem distinguir `Personal` e `Student` por roles/claims e vínculos de domínio.
+Três escolhas moldam o resto:
+- **O vínculo guarda os dados que o personal digitou** (nome, e-mail, celular). A conta do aluno é só a identidade de login. Assim um aluno pode ter vários personais (D-015) sem que um veja o que o outro cadastrou.
+- **Cada aula guarda o próprio preço** (`UnitPrice`) no momento do registro (D-018).
+- **Demonstrativo emitido nunca muda.** Exclusão posterior vira crédito no mês seguinte (D-023).
 
-### 3.2 PersonalProfile
-- Id
-- UserId (FK para usuário)
-- DisplayName
-- CreatedAtUtc
-- IsActive
+```mermaid
+erDiagram
+    AspNetUsers ||--o| PersonalProfile : "é personal"
+    AspNetUsers ||--o{ PersonalStudent : "é aluno em"
+    PersonalProfile ||--o{ PersonalStudent : "atende"
+    PersonalStudent ||--o{ StudentInvite : "convida por"
+    PersonalStudent ||--o{ Lesson : "registra"
+    PersonalStudent ||--o{ BillingPeriod : "fecha"
+    BillingPeriod ||--|{ BillingPeriodItem : "compõe"
+    Lesson |o--o{ BillingPeriodItem : "cobrada ou creditada em"
+    BillingPeriod ||--o{ Payment : "recebe"
+    AspNetUsers ||--o{ NotificationOutbox : "recebe"
+    AspNetUsers ||--o{ AuditLog : "executa"
 
-Personal é provisionado manualmente no MVP por processo operacional controlado. Não permitir autoelevação para role Personal.
+    AspNetUsers {
+        uuid Id PK
+        string Email
+        string PhoneNumber
+    }
+    PersonalProfile {
+        uuid Id PK
+        uuid UserId FK "único"
+        string DisplayName
+        bool IsActive
+    }
+    PersonalStudent {
+        uuid Id PK
+        uuid PersonalId FK
+        uuid StudentUserId FK "nulo até aceitar convite"
+        string StudentName
+        string StudentEmail
+        string StudentPhone
+        decimal LessonPrice
+        smallint BillingDueDay
+        string Status "Invited, Active, Inactive"
+    }
+    StudentInvite {
+        uuid Id PK
+        uuid PersonalStudentId FK
+        bytea TokenHash "único"
+        timestamptz ExpiresAtUtc
+        timestamptz UsedAtUtc
+    }
+    Lesson {
+        uuid Id PK
+        uuid PersonalStudentId FK
+        timestamptz OccurredAtUtc
+        decimal UnitPrice
+        string Status "Pending, Approved, Rejected"
+        timestamptz DeletedAtUtc
+    }
+    BillingPeriod {
+        uuid Id PK
+        uuid PersonalStudentId FK
+        date ReferenceMonth
+        date DueDate
+        decimal TotalAmount
+        string Status "Issued, PaymentReported, Paid"
+    }
+    BillingPeriodItem {
+        uuid Id PK
+        uuid BillingPeriodId FK
+        uuid LessonId FK
+        string Kind "Lesson, Adjustment"
+        decimal Amount
+    }
+    Payment {
+        uuid Id PK
+        uuid BillingPeriodId FK
+        decimal Amount
+        string Status "Reported, Confirmed, Rejected"
+    }
+    NotificationOutbox {
+        uuid Id PK
+        uuid RecipientUserId FK
+        string EventType
+        string Status
+    }
+    AuditLog {
+        uuid Id PK
+        uuid ActorUserId FK
+        string Action
+        uuid EntityId
+    }
+```
 
-### 3.3 StudentProfile
-- Id
-- UserId (FK; pode ser nulo antes do convite, se esse fluxo for aprovado)
-- FullName
-- CPF (opcional/definir obrigatoriedade; se armazenado, proteger e restringir acesso)
-- PhoneNumber
-- Email
-- CreatedAtUtc
-- IsActive
+## 4. Tabelas
 
-**A DEFINIR:** cadastro cria imediatamente uma conta Identity ou cria aluno pendente de convite? O personal pode cadastrar aluno sem e-mail? Como tratar CPF duplicado e aluno que troca de personal?
+### 4.1 Identity
+ASP.NET Core Identity com chaves `Guid` e duas roles: `Personal` e `Student`. Nenhuma tabela de senha própria. Não permitir autoelevação para a role `Personal`.
 
-### 3.4 PersonalStudent
-Vínculo explícito entre personal e aluno:
-- Id
-- PersonalId
-- StudentId
-- LinkedAtUtc
-- Status (Active/Inactive)
-- BillingDueDay
-- LessonPrice (se preço por aula for confirmado)
-- CurrencyCode (BRL)
+### 4.2 PersonalProfile
 
-Esse vínculo é o local natural para configurações comerciais específicas daquela relação.
+| Coluna | Tipo | Regras |
+| --- | --- | --- |
+| UserId | uuid | FK Identity, único |
+| DisplayName | varchar(120) | obrigatório |
+| PhoneNumber | varchar(20) | formato E.164, para WhatsApp |
+| IsActive | boolean | personal inativo não entra |
 
-**A DEFINIR:** um aluno pode estar ligado a mais de um personal? Se sim, garantir unicidade por par e separar configurações por vínculo. Se não, impor regra de vínculo único ativo.
+Criado somente pelo script de provisionamento (D-027).
 
-### 3.5 Lesson
-- Id
-- PersonalStudentId
-- CreatedByPersonalUserId
-- OccurredAtUtc (data/hora em que a aula aconteceu)
-- DurationMinutes (opcional)
-- Notes (opcional; avaliar dados pessoais/sensíveis)
-- Status (Pending, Approved, Rejected, Deleted)
-- CreatedAtUtc
-- RespondedAtUtc (nullable)
-- RejectionReason (nullable, se justificativa for aprovada)
-- DeletedAtUtc (nullable)
-- DeletedByUserId (nullable)
-- DeletionReason (obrigatória se excluir aula já decidida)
-- RowVersion/concurrency token ou mecanismo equivalente
+### 4.3 PersonalStudent (vínculo)
 
-Separar `OccurredAtUtc` de `CreatedAtUtc`: a aula pode ser registrada depois de ter ocorrido, se a regra permitir.
+| Coluna | Tipo | Regras |
+| --- | --- | --- |
+| PersonalId | uuid | FK `PersonalProfile` |
+| StudentUserId | uuid null | FK Identity; preenchido ao aceitar o convite |
+| StudentName | varchar(150) | obrigatório |
+| StudentEmail | varchar(256) | obrigatório, guardado normalizado |
+| StudentPhone | varchar(20) | obrigatório, E.164 |
+| LessonPrice | numeric(12,2) | `> 0` |
+| BillingDueDay | smallint | `BETWEEN 1 AND 31` |
+| Status | varchar(16) | `Invited`, `Active`, `Inactive` |
+| ActivatedAtUtc, EndedAtUtc | timestamptz null | `EndedAtUtc` obrigatório quando `Inactive` (D-028) |
 
-**A DEFINIR:** data retroativa permitida? Duração necessária? Uma aula pode ser editada? Qual regra de duplicidade? A recusa exige justificativa?
+Índices: único `(PersonalId, StudentUserId)` onde `StudentUserId IS NOT NULL`; único `(PersonalId, StudentEmail)` onde `Status <> 'Inactive'`; `(StudentUserId, Status)`; `(PersonalId, Status)`.
 
-### 3.6 BillingPeriod
-Representa o fechamento de um período de cobrança de um aluno.
-- Id
-- PersonalStudentId
-- PeriodStart
-- PeriodEnd (definir inclusividade)
-- DueDate
-- Status (Open, Closed/Issued, PaymentReported, Paid, Adjusted/Cancelled — validar estados)
-- CurrencyCode
-- TotalAmount
-- CreatedAtUtc
-- ClosedAtUtc (nullable)
-- PaidAtUtc (nullable)
+### 4.4 StudentInvite
 
-Criar restrição única para impedir dois fechamentos do mesmo vínculo e período.
+| Coluna | Tipo | Regras |
+| --- | --- | --- |
+| PersonalStudentId | uuid | FK vínculo |
+| TokenHash | bytea | SHA-256 do token, único; o token puro nunca é gravado |
+| ExpiresAtUtc | timestamptz | 7 dias após criar (D-016) |
+| UsedAtUtc, RevokedAtUtc | timestamptz null | usado ou revogado = inválido |
 
-O período deve ser imutável após fechamento, ou possuir mecanismo explícito de ajuste/versionamento. Não recalcular silenciosamente um demonstrativo já enviado.
+### 4.5 Lesson
 
-### 3.7 BillingPeriodLesson
-Snapshot das aulas que compõem o fechamento:
-- Id
-- BillingPeriodId
-- LessonId
-- UnitPrice
-- Amount
-- LessonDescriptionSnapshot ou campos mínimos para demonstrativo
+| Coluna | Tipo | Regras |
+| --- | --- | --- |
+| PersonalStudentId | uuid | FK vínculo |
+| CreatedByUserId | uuid | FK Identity (o personal) |
+| OccurredAtUtc | timestamptz | quando a aula aconteceu; pode ser retroativa |
+| DurationMinutes | smallint null | opcional, `> 0` |
+| Notes | varchar(500) null | opcional |
+| UnitPrice | numeric(12,2) | cópia de `LessonPrice` no registro |
+| Status | varchar(16) | `Pending`, `Approved`, `Rejected` |
+| RespondedAtUtc, RespondedByUserId | null | preenchidos juntos quando o aluno decide |
+| RejectionReason | varchar(500) null | obrigatório quando `Rejected` (D-021) |
+| DeletedAtUtc, DeletedByUserId | null | exclusão lógica |
+| DeletionReason | varchar(500) null | obrigatório se excluída com `Status <> 'Pending'` |
 
-A tabela snapshot preserva exatamente quais aulas e valores foram cobrados, mesmo que configurações de preço mudem depois.
+Índices: `(PersonalStudentId, OccurredAtUtc)` e `(PersonalStudentId, Status)`, ambos filtrando `DeletedAtUtc IS NULL`.
 
-### 3.8 Payment
-Registro de comunicação e confirmação de pagamento:
-- Id
-- BillingPeriodId
-- ReportedByStudentUserId
-- ReportedAtUtc
-- ConfirmedByPersonalUserId (nullable)
-- ConfirmedAtUtc (nullable)
-- Amount
-- Status (Reported, Confirmed, Disputed/Cancelled — definir)
-- Notes (opcional; não solicitar comprovante no MVP sem aprovação)
+### 4.6 BillingPeriod
 
-Não considerar o período pago apenas porque o aluno informou o pagamento. O estado `Paid` só ocorre após confirmação do personal.
+| Coluna | Tipo | Regras |
+| --- | --- | --- |
+| PersonalStudentId | uuid | FK vínculo |
+| ReferenceMonth | date | sempre dia 1; único com o vínculo |
+| PeriodStart, PeriodEnd | date | início inclusivo, fim exclusivo |
+| DueDate | date | dia de vencimento ajustado ao mês (D-025) |
+| TotalAmount | numeric(12,2) | soma dos itens, `>= 0` |
+| Status | varchar(20) | `Issued`, `PaymentReported`, `Paid` |
+| IssuedAtUtc, PaidAtUtc | timestamptz | `PaidAtUtc` só com `Paid` |
 
-### 3.9 NotificationOutbox
+O índice único `(PersonalStudentId, ReferenceMonth)` torna o job de fechamento idempotente: rodar duas vezes não cria dois demonstrativos.
+
+### 4.7 BillingPeriodItem
+
+| Coluna | Tipo | Regras |
+| --- | --- | --- |
+| BillingPeriodId | uuid | FK período |
+| Kind | varchar(16) | `Lesson` ou `Adjustment` |
+| LessonId | uuid null | FK aula |
+| Description | varchar(200) | texto congelado para o demonstrativo |
+| Amount | numeric(12,2) | positivo em `Lesson`, negativo em crédito |
+
+Índice único `(LessonId, Kind)`: uma aula é cobrada no máximo uma vez e creditada no máximo uma vez. Se os créditos passarem do total, o saldo vai para o mês seguinte (D-023).
+
+### 4.8 Payment
+
+| Coluna | Tipo | Regras |
+| --- | --- | --- |
+| BillingPeriodId | uuid | FK período |
+| Amount | numeric(12,2) | igual ao total do período (D-024) |
+| Status | varchar(16) | `Reported`, `Confirmed`, `Rejected` |
+| ReportedByUserId, ReportedAtUtc | | o aluno que informou |
+| DecidedByUserId, DecidedAtUtc | null | o personal que confirmou ou recusou |
+| Notes | varchar(500) null | opcional, sem comprovante no MVP |
+
+Índice único `(BillingPeriodId)` onde `Status IN ('Reported','Confirmed')`: só um pagamento ativo por período.
+
+### 4.9 NotificationOutbox
 Fila persistente de notificações a enviar:
 - Id
 - EventType
@@ -140,14 +220,14 @@ Fila persistente de notificações a enviar:
 - Status (Pending, Processing, Sent, Failed)
 - Attempts
 - NextAttemptAtUtc
-- CreatedAtUtc
 - SentAtUtc
 - ProviderMessageId
 - LastError (sanitizado)
+- IdempotencyKey `varchar(100)`, único (ex.: `lesson-created:<id>`), para nunca enfileirar o mesmo aviso duas vezes
 
-A outbox permite salvar a operação de negócio e a intenção de notificar na mesma transação. Um worker envia posteriormente e aplica retry controlado. Nunca depender do envio síncrono de WhatsApp para concluir registro de aula ou pagamento.
+Índice `(Status, NextAttemptAtUtc)`. A outbox salva a operação de negócio e a intenção de notificar na mesma transação. Um worker envia depois e aplica retry controlado. Nunca depender do envio síncrono de WhatsApp para concluir registro de aula ou pagamento.
 
-### 3.10 AuditLog
+### 4.10 AuditLog
 Trilha de auditoria para ações críticas:
 - Id
 - ActorUserId
@@ -158,73 +238,90 @@ Trilha de auditoria para ações críticas:
 - CorrelationId
 - Metadata minimizada e sanitizada
 
-Não copiar CPF, senha, tokens ou conteúdo pessoal desnecessário para auditoria.
+Índice `(EntityType, EntityId)`. Não copiar senha, tokens ou conteúdo pessoal desnecessário para auditoria.
 
-## 4. Relações conceituais
+## 5. Estados e transições
 
-- User 1:1 PersonalProfile (para usuários personal).
-- User 1:1 StudentProfile (para usuários aluno).
-- PersonalProfile 1:N PersonalStudent.
-- StudentProfile 1:N PersonalStudent.
-- PersonalStudent 1:N Lesson.
-- PersonalStudent 1:N BillingPeriod.
-- BillingPeriod 1:N BillingPeriodLesson.
-- Lesson 1:N BillingPeriodLesson, conforme política de fechamento.
-- BillingPeriod 1:N Payment (ou 1:1 se pagamento único for decidido).
-- Eventos de negócio geram 1:N NotificationOutbox.
-- Ações relevantes geram AuditLog.
+A exclusão de aula não é um estado: fica em `DeletedAtUtc`, separada da decisão do aluno. Assim o histórico mostra, por exemplo, "aprovada e depois excluída pelo personal".
 
-## 5. Restrições e índices sugeridos
+### 5.1 Aula
 
-Validar antes de criar:
-- Índices em `PersonalStudent(PersonalId, Status)` e `PersonalStudent(StudentId, Status)`.
-- Índices em `Lesson(PersonalStudentId, OccurredAtUtc)` e `Lesson(PersonalStudentId, Status)`.
-- Índice em `BillingPeriod(PersonalStudentId, PeriodStart, PeriodEnd)`.
-- Índice em `NotificationOutbox(Status, NextAttemptAtUtc)`.
-- Restrição única para evitar fechamento duplicado de período.
-- FK obrigatória em todos os vínculos.
-- Check constraints para valores monetários não negativos e dias de vencimento válidos (1 a 31).
-- Concorrência otimista para evitar duas respostas conflitantes para a mesma aula.
-- Idempotência para callbacks/webhooks e comandos que possam ser repetidos.
+```mermaid
+stateDiagram-v2
+    [*] --> Pending : personal registra
+    Pending --> Approved : aluno aprova
+    Pending --> Rejected : aluno recusa (motivo)
+    Pending --> Excluida : personal exclui
+    Approved --> Excluida : personal exclui (motivo)
+    Rejected --> Excluida : personal exclui (motivo)
+    Excluida --> [*]
+```
 
-## 6. Regras de consistência importantes
+A resposta do aluno só vale se a aula estiver `Pending` e não excluída; respostas simultâneas são barradas pelo `xmin`.
+
+### 5.2 Demonstrativo e pagamento
+
+```mermaid
+stateDiagram-v2
+    [*] --> Issued : job no vencimento
+    Issued --> PaymentReported : aluno informa pagamento
+    PaymentReported --> Issued : personal recusa o aviso
+    PaymentReported --> Paid : personal confirma
+    Paid --> [*]
+```
+
+Cada aviso do aluno cria um `Payment` em `Reported`. A confirmação muda o pagamento para `Confirmed` e o período para `Paid` na mesma transação; a recusa muda o pagamento para `Rejected` e devolve o período para `Issued`. Demonstrativo com total zero já nasce `Paid`.
+
+## 6. Identity e vínculo
+
+O personal nasce por um script de linha de comando que cria o usuário, a role `Personal` e o `PersonalProfile` numa transação (D-027).
+
+O aluno é cadastrado pelo personal como vínculo `Invited` e recebe um convite (D-016). Ao aceitar, ganha a role `Student` e o `StudentUserId` do vínculo é preenchido. Se o e-mail do convite já tiver conta (aluno de outro personal), o aceite pede login em vez de nova senha e só liga o vínculo.
+
+## 7. Consultas principais
+
+Toda consulta parte do vínculo filtrado pelo usuário logado. No código viram LINQ projetado para DTO.
+
+```sql
+-- Aulas do aluno logado em um mês (horário de São Paulo)
+SELECT l."Id", l."OccurredAtUtc", l."Status", l."UnitPrice"
+FROM "Lesson" l
+JOIN "PersonalStudent" ps ON ps."Id" = l."PersonalStudentId"
+WHERE ps."StudentUserId" = @userId
+  AND l."DeletedAtUtc" IS NULL
+  AND l."OccurredAtUtc" >= @inicioMesUtc AND l."OccurredAtUtc" < @fimMesUtc
+ORDER BY l."OccurredAtUtc" DESC;
+
+-- Aulas aprovadas ainda não cobradas, para o fechamento
+SELECT l."Id", l."UnitPrice"
+FROM "Lesson" l
+WHERE l."PersonalStudentId" = @vinculoId
+  AND l."Status" = 'Approved' AND l."DeletedAtUtc" IS NULL
+  AND l."OccurredAtUtc" < @fimPeriodoUtc
+  AND NOT EXISTS (SELECT 1 FROM "BillingPeriodItem" i
+                  WHERE i."LessonId" = l."Id" AND i."Kind" = 'Lesson');
+
+-- Pagamentos aguardando confirmação do personal logado
+SELECT bp."ReferenceMonth", ps."StudentName", p."Amount", p."ReportedAtUtc"
+FROM "Payment" p
+JOIN "BillingPeriod" bp ON bp."Id" = p."BillingPeriodId"
+JOIN "PersonalStudent" ps ON ps."Id" = bp."PersonalStudentId"
+JOIN "PersonalProfile" pp ON pp."Id" = ps."PersonalId"
+WHERE pp."UserId" = @userId AND p."Status" = 'Reported';
+```
+
+## 8. Regras de consistência
 - Somente o personal proprietário do vínculo pode registrar ou excluir aulas.
 - Somente o aluno associado pode aprovar/recusar uma aula.
 - A resposta só pode ser aplicada se a aula estiver pendente.
 - O personal não pode confirmar pagamento de período pertencente a outro personal.
 - O aluno só pode reportar pagamento do próprio período.
-- Aula incluída em fechamento deve ser identificável e não cobrada em dois períodos.
-- Exclusão de aula após fechamento deve gerar política de ajuste explícita; nunca alterar total histórico silenciosamente.
-- Notificação pode falhar sem desfazer a operação de domínio; a outbox deve permitir retentativa.
+- Aula não é cobrada em dois períodos (índice único em `BillingPeriodItem`).
+- Exclusão de aula após fechamento gera crédito no próximo período; nunca alterar total histórico.
+- Notificação pode falhar sem desfazer a operação de domínio; a outbox permite retentativa.
 - Todas as operações críticas devem ser seguras contra repetição.
 
-## 7. Decisões de negócio que precisam ser aprovadas antes do modelo final
-
-1. Um aluno pode ter mais de um personal?
-2. O aluno terá login próprio desde o cadastro ou receberá convite?
-3. Quais dados pessoais são realmente necessários? CPF é obrigatório?
-4. O preço é por aula, mensalidade fixa ou ambos?
-5. O preço pode variar ao longo do tempo? Como preservar preço histórico?
-6. Qual é a definição exata do período mensal: mês calendário ou ciclo de vencimento?
-7. A aula é cobrada quando está pendente, apenas quando aprovada, ou após outra regra?
-8. Como tratar aula recusada?
-9. Qual prazo o aluno tem para reconhecer/recusar?
-10. A exclusão de aula já incluída em período fechado gera reabertura, crédito ou ajuste no próximo período?
-11. Pagamento parcial é permitido?
-12. Um período pode ter mais de um pagamento?
-13. O que acontece se o dia de vencimento for 29, 30 ou 31 em um mês curto?
-14. Qual fuso horário será usado? Proposta: `America/Sao_Paulo`, confirmando se o produto é inicialmente Brasil-only.
-15. Como deve ser tratado o encerramento do vínculo entre personal e aluno?
-
-## 8. Entregável de modelagem
-
-Antes da implementação, o agente deve apresentar:
-- Diagrama ER (Mermaid).
-- Descrição de tabelas, colunas, tipos, PKs, FKs, índices e constraints.
-- Estados e transições de aula, cobrança e pagamento.
-- Estratégia de Identity e vínculo entre usuário e perfil.
-- Exemplos de consultas principais.
-- Justificativa para snapshot de cobrança e outbox.
-- Dúvidas pendentes e proposta de resolução.
-
-Aguardar aprovação explícita antes de criar migrations.
+## 9. Pontos ainda abertos
+- Prazo de retenção de dados após o fim do vínculo (P-017).
+- Provedor e fluxo de WhatsApp (P-013, P-014) e notificações internas (P-018), na Fase 6.
+- Nenhuma migration deve ser criada antes da configuração da solução (Fase 0, próximo passo).

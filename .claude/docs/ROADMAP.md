@@ -3,11 +3,11 @@
 A sequência é uma proposta. O agente deve validar dependências e obter aprovação antes de iniciar cada etapa. Cada feature segue obrigatoriamente design → aprovação → implementação → testes.
 
 ## Fase 0 — Descoberta e fundação
-- [ ] Inspecionar repositório existente.
+- [x] Inspecionar repositório existente.
 - [ ] Confirmar versão do SDK e estrutura da solução.
-- [ ] Resolver decisões de domínio pendentes que bloqueiam o banco.
-- [ ] Apresentar diagrama ER e estados.
-- [ ] Aprovar arquitetura e modelo de dados.
+- [x] Resolver decisões de domínio pendentes que bloqueiam o banco (D-015 a D-029, 2026-11-03).
+- [x] Apresentar diagrama ER e estados.
+- [x] Aprovar arquitetura e modelo de dados (2026-11-03).
 - [ ] Configurar solução, PostgreSQL Docker e migrations iniciais após aprovação.
 - [ ] Configurar logs estruturados, health checks e ambientes.
 
