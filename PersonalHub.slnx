@@ -1,2 +1,9 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PersonalHub.Web/PersonalHub.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PersonalHub.IntegrationTests/PersonalHub.IntegrationTests.csproj" />
+    <Project Path="tests/PersonalHub.UnitTests/PersonalHub.UnitTests.csproj" />
+  </Folder>
 </Solution>
