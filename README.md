@@ -72,6 +72,30 @@ dotnet run --project src/PersonalHub.Web
 
 A URL aparece no terminal. O health check fica em `/health` e inclui a conexão com o PostgreSQL.
 
+## Observabilidade
+
+**Logs.** A aplicação escreve logs no console, com o formato definido pelo ambiente:
+- **Development:** uma linha legível por evento, com os escopos ativos. O SQL gerado pelo EF Core aparece em nível Information, sem os valores dos parâmetros.
+- **Demais ambientes (Production etc.):** JSON, uma linha por evento, com timestamp em UTC e os escopos. É o formato pronto para um coletor de logs.
+
+Os níveis por categoria ficam em `appsettings.json`, `appsettings.Development.json` e `appsettings.Production.json`. Para ver os logs de Production localmente:
+
+```bash
+ASPNETCORE_ENVIRONMENT=Production ConnectionStrings__PersonalHub="Host=localhost;..." dotnet run --project src/PersonalHub.Web --no-launch-profile
+```
+
+Cada requisição HTTP gera uma linha com método, caminho, status e duração. Ficam de fora `/health` e os arquivos estáticos. A query string, os corpos e os headers nunca são registrados.
+
+**Correlation ID.** Toda resposta traz o header `X-Correlation-ID`:
+- Se a requisição já trouxer um valor válido (até 64 caracteres, só letras, dígitos e hífen), ele é mantido.
+- Caso contrário, usa-se o TraceId da requisição.
+
+O mesmo id aparece no escopo `CorrelationId` de todos os logs da requisição e na página de erro. Assim, um usuário pode informar o código e você encontra os logs correspondentes. Em Blazor Server, os eventos de um circuito carregam o id da requisição que abriu a conexão.
+
+**Nunca registrar em logs:** senha, tokens (de convite, sessão, API ou WhatsApp), CPF, conteúdo de mensagens WhatsApp, connection strings, nem dados pessoais além do necessário. Nunca habilitar `EnableSensitiveDataLogging` do EF Core.
+
+**Erros.** Fora de Development, uma exceção não tratada mostra só uma mensagem genérica e o correlation ID, sem stack trace. Os detalhes vão para o log. `/health` responde apenas `Healthy` ou `Unhealthy`.
+
 ## Testes
 
 Os testes de integração usam o PostgreSQL do Docker Compose com um banco separado, criado e apagado a cada execução. O nome do banco precisa conter `test` (proteção contra apagar o banco de desenvolvimento).
