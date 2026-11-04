@@ -1,12 +1,12 @@
 using PersonalHub.Web.Components;
+using PersonalHub.Web.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Health check da aplicação; a verificação do PostgreSQL entra junto com o EF Core.
-builder.Services.AddHealthChecks();
+builder.Services.AddPersistence();
 
 var app = builder.Build();
 
