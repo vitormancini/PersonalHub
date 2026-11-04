@@ -1,6 +1,4 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using PersonalHub.Web.Infrastructure.Identity;
 
 namespace PersonalHub.Web.Infrastructure.Persistence;
 
@@ -24,11 +22,6 @@ public static class PersistenceServiceCollectionExtensions
 
             options.UseNpgsql(connectionString);
         });
-
-        // Somente o núcleo do Identity (usuários, roles e stores). Cookies e telas de login entram na Fase 1.
-        services.AddIdentityCore<ApplicationUser>(options => options.User.RequireUniqueEmail = true)
-            .AddRoles<IdentityRole<Guid>>()
-            .AddEntityFrameworkStores<AppDbContext>();
 
         services.AddHealthChecks()
             .AddDbContextCheck<AppDbContext>("database");

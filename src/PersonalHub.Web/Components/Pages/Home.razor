@@ -1,7 +1,12 @@
-﻿@page "/"
+@page "/"
+@using PersonalHub.Web.Features.Authentication
+@inject NavigationManager Navigation
 
-<PageTitle>Home</PageTitle>
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
 
-<h1>Hello, world!</h1>
-
-Welcome to your new app.
+    // Raiz do site: quem está logado vai para a própria área; os demais, para o login.
+    protected override void OnInitialized() =>
+        Navigation.NavigateTo(UserHome.For(HttpContext.User) ?? "/entrar");
+}

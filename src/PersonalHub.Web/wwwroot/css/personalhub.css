@@ -1,0 +1,510 @@
+/*
+ * PersonalHub: tokens de tema e componentes próprios (prefixo ph-).
+ * Complementa o Bootstrap sem sobrescrever as classes dele.
+ */
+
+:root {
+    --ph-font: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    --ph-navy: #0C2842;
+    --ph-accent: #37A0F8;          /* azul vibrante sobre o azul-marinho */
+    --ph-primary: #0769C1;         /* ação primária sobre fundo claro */
+    --ph-primary-hover: #0558A3;
+    --ph-focus: #7CC4FA;
+
+    --ph-text: #102A43;
+    --ph-text-muted: #475569;
+    --ph-on-navy: #FFFFFF;
+    --ph-on-navy-muted: #C9D6E3;
+    --ph-on-navy-soft: #DCE6F0;
+    --ph-on-navy-subtle: #9FB3C8;
+
+    --ph-surface: #FFFFFF;
+    --ph-background: #F4F7FB;
+    --ph-border: #E2E8F0;
+    --ph-input-border: #94A3B8;
+
+    --ph-danger: #B42318;
+    --ph-danger-bg: #FEF3F2;
+    --ph-danger-border: #FDA29B;
+    --ph-danger-text: #912018;
+    --ph-warning-bg: #FFFAEB;
+    --ph-warning-border: #FEC84B;
+    --ph-warning-text: #7A2E0E;
+
+    --ph-radius-control: 12px;
+}
+
+@media (min-width: 768px) {
+    :root {
+        --ph-radius-control: 10px;
+    }
+}
+
+html, body {
+    font-family: var(--ph-font);
+    color: var(--ph-text);
+}
+
+.ph-text-accent {
+    color: var(--ph-accent);
+}
+
+/* ---------- Logo ---------- */
+
+.ph-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ph-logo-symbol {
+    width: 34px;
+    height: 40px;
+    fill: var(--ph-accent);
+    flex-shrink: 0;
+}
+
+.ph-logo-wordmark {
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    color: var(--ph-on-navy);
+}
+
+.ph-logo-accent {
+    color: var(--ph-accent);
+}
+
+.ph-logo-lg .ph-logo-symbol {
+    width: 38px;
+    height: 44px;
+}
+
+.ph-logo-lg .ph-logo-wordmark {
+    font-size: 26px;
+}
+
+.ph-logo-sm .ph-logo-symbol {
+    width: 24px;
+    height: 28px;
+}
+
+.ph-logo-sm .ph-logo-wordmark {
+    font-size: 19px;
+}
+
+/* ---------- Autenticação (mobile first) ---------- */
+
+.ph-auth {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: var(--ph-navy);
+}
+
+.ph-auth-hero {
+    padding: 56px 24px 32px;
+    color: var(--ph-on-navy);
+}
+
+.ph-auth-hero-title {
+    margin: 32px 0 8px;
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.ph-auth-hero-text {
+    margin: 0;
+    font-size: 16px;
+    color: var(--ph-on-navy-muted);
+}
+
+.ph-auth-main {
+    flex: 1;
+    background: var(--ph-surface);
+    border-radius: 24px 24px 0 0;
+    padding: 32px 24px 24px;
+}
+
+.ph-auth-card-title {
+    margin: 0 0 8px;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--ph-text);
+}
+
+.ph-auth-card-text {
+    margin: 0 0 28px;
+    font-size: 15px;
+    color: var(--ph-text-muted);
+}
+
+.ph-auth-note {
+    margin: 28px 0 0;
+    padding-top: 20px;
+    border-top: 1px solid var(--ph-border);
+    font-size: 14px;
+    color: var(--ph-text-muted);
+    text-align: center;
+}
+
+.ph-auth-brand {
+    flex-direction: column;
+    justify-content: space-between;
+    color: var(--ph-on-navy);
+}
+
+.ph-auth-brand-title {
+    margin: 0 0 32px;
+    font-size: 40px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.ph-auth-features {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 18px;
+}
+
+.ph-auth-features li {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 16px;
+    color: var(--ph-on-navy-soft);
+}
+
+.ph-auth-features svg {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    fill: none;
+    stroke: var(--ph-accent);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ph-auth-brand-footer {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ph-on-navy-subtle);
+}
+
+@media (min-width: 768px) {
+    .ph-auth {
+        flex-direction: row;
+    }
+
+    .ph-auth-brand {
+        flex: 0 0 clamp(320px, 44vw, 560px);
+        padding: 56px clamp(32px, 5vw, 64px);
+    }
+
+    .ph-auth-main {
+        border-radius: 0;
+        background: var(--ph-background);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 24px;
+    }
+
+    .ph-auth-card {
+        width: 100%;
+        max-width: 420px;
+        background: var(--ph-surface);
+        border: 1px solid var(--ph-border);
+        border-radius: 16px;
+        padding: 40px;
+    }
+}
+
+/* ---------- Formulário ---------- */
+
+.ph-form {
+    display: grid;
+    gap: 20px;
+}
+
+.ph-field {
+    display: grid;
+    gap: 6px;
+}
+
+.ph-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ph-text);
+}
+
+.ph-input {
+    width: 100%;
+    height: 52px;
+    padding: 0 16px;
+    font: inherit;
+    font-size: 16px; /* 16px evita o zoom automático do iOS ao focar */
+    color: var(--ph-text);
+    background: var(--ph-surface);
+    border: 1px solid var(--ph-input-border);
+    border-radius: var(--ph-radius-control);
+}
+
+.ph-input::placeholder {
+    color: #64748B;
+}
+
+.ph-input:focus {
+    outline: 3px solid var(--ph-focus);
+    outline-offset: 1px;
+}
+
+/* Sobrepõe as classes de validação globais do template (app.css). */
+.ph-input.valid.modified {
+    outline: none;
+}
+
+.ph-input.invalid {
+    border: 2px solid var(--ph-danger);
+    outline: none;
+}
+
+.ph-input.invalid:focus {
+    outline: 3px solid var(--ph-focus);
+}
+
+.ph-field-error {
+    font-size: 13px;
+    color: var(--ph-danger);
+}
+
+.ph-password {
+    position: relative;
+}
+
+.ph-password .ph-input {
+    padding-right: 52px;
+}
+
+.ph-password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: var(--ph-text-muted);
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+}
+
+.ph-password-toggle:focus-visible {
+    outline: 3px solid var(--ph-focus);
+}
+
+.ph-password-toggle svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ph-password-toggle .ph-icon-hide,
+.ph-password-toggle[data-visible="true"] .ph-icon-show {
+    display: none;
+}
+
+.ph-password-toggle[data-visible="true"] .ph-icon-hide {
+    display: block;
+}
+
+.ph-check {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    margin: -8px 0;
+    font-size: 15px;
+    color: var(--ph-text);
+    cursor: pointer;
+}
+
+.ph-check-input {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    accent-color: var(--ph-primary);
+}
+
+.ph-check-input:focus-visible {
+    outline: 3px solid var(--ph-focus);
+    outline-offset: 2px;
+}
+
+/* ---------- Botões ---------- */
+
+.ph-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 18px;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    border: 1px solid transparent;
+    border-radius: var(--ph-radius-control);
+    cursor: pointer;
+}
+
+.ph-btn:focus-visible {
+    outline: 3px solid var(--ph-focus);
+    outline-offset: 2px;
+}
+
+.ph-btn-block {
+    width: 100%;
+}
+
+.ph-btn-primary {
+    height: 52px;
+    color: #FFFFFF;
+    background: var(--ph-primary);
+}
+
+.ph-btn-primary:hover {
+    background: var(--ph-primary-hover);
+}
+
+.ph-btn-primary:disabled {
+    opacity: 0.8;
+    cursor: progress;
+}
+
+.ph-btn-on-dark {
+    color: var(--ph-on-navy);
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.35);
+    font-size: 15px;
+}
+
+.ph-btn-on-dark:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.ph-btn-spinner {
+    display: none;
+}
+
+.ph-btn[aria-busy="true"] .ph-btn-spinner {
+    display: inline-block;
+}
+
+@media (min-width: 768px) {
+    .ph-input,
+    .ph-btn-primary {
+        height: 48px;
+    }
+}
+
+/* ---------- Alertas ---------- */
+
+.ph-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    font-size: 14px;
+    border: 1px solid;
+    border-radius: 12px;
+}
+
+.ph-alert p {
+    margin: 0;
+}
+
+.ph-alert-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ph-alert-danger {
+    color: var(--ph-danger-text);
+    background: var(--ph-danger-bg);
+    border-color: var(--ph-danger-border);
+}
+
+.ph-alert-warning {
+    color: var(--ph-warning-text);
+    background: var(--ph-warning-bg);
+    border-color: var(--ph-warning-border);
+}
+
+/* ---------- Área logada ---------- */
+
+.ph-app {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--ph-background);
+}
+
+.ph-app-header {
+    background: var(--ph-navy);
+}
+
+.ph-app-header-inner,
+.ph-app-main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+.ph-app-header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 64px;
+}
+
+.ph-app-main {
+    padding-top: 24px;
+    padding-bottom: 24px;
+}
+
+.ph-page-title {
+    margin: 0 0 16px;
+    font-size: 26px;
+    font-weight: 800;
+}
+
+.ph-card {
+    padding: 20px;
+    background: var(--ph-surface);
+    border: 1px solid var(--ph-border);
+    border-radius: 16px;
+    color: var(--ph-text-muted);
+}
