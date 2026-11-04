@@ -1,12 +1,12 @@
 @page "/personal"
 @attribute [Authorize(Roles = AppRoles.Personal)]
-@layout AppLayout
+@layout PersonalLayout
 
-<PageTitle>Início · PersonalHub</PageTitle>
+<PersonalPageHeader Title="Início" />
 
-<h1 class="ph-page-title">Início</h1>
 <div class="ph-card">
-    <p class="mb-0">
+    <p>
         Esta área está em construção. Em breve você vai registrar aulas, acompanhar alunos e ver o faturamento por aqui.
     </p>
+    <a href="/personal/alunos/novo" class="ph-btn ph-btn-primary ph-btn-block">Novo aluno</a>
 </div>

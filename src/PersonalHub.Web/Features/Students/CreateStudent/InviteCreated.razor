@@ -1,0 +1,102 @@
+@page "/personal/alunos/{PersonalStudentId:guid}/convite-criado"
+@attribute [Authorize(Roles = AppRoles.Personal)]
+@layout PersonalLayout
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Domain
+@using PersonalHub.Web.Domain.Students
+@inject InviteCreatedQuery Query
+@inject CreatedInviteHandoff Handoff
+@inject NavigationManager Navigation
+
+<PersonalPageHeader Title="Convite do aluno" BackHref="/personal/alunos" BackLabel="Voltar para alunos" />
+
+@if (_view is not null)
+{
+    <div class="ph-result">
+        <div class="ph-status-icon ph-status-success" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false"><path d="m5 12 5 5L20 7" /></svg>
+        </div>
+        <h2 class="ph-result-title">Aluno cadastrado: @_view.StudentName</h2>
+        <p class="ph-result-text">Agora envie o convite. O link vale por 7 dias e só pode ser usado uma vez.</p>
+    </div>
+
+    <section class="ph-section-card" aria-labelledby="link-convite">
+        <div class="ph-section-heading">
+            <h3 id="link-convite" class="ph-section-title">Link do convite</h3>
+            @if (_view.Status == PersonalStudentStatus.Invited)
+            {
+                <span class="ph-pill ph-pill-warning">Aguardando aceite</span>
+            }
+        </div>
+
+        @if (_inviteUrl is not null)
+        {
+            <p id="invite-link" class="ph-link-box">@_inviteUrl</p>
+            <button type="button" class="ph-btn ph-btn-outline ph-btn-block" data-ph-copy="invite-link"
+                    data-ph-copied-text="Link copiado">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                <span class="ph-btn-text" aria-live="polite">Copiar link</span>
+            </button>
+            @if (_view.InviteExpiresAtUtc is { } expires)
+            {
+                <p class="ph-note">Expira em @SaoPaulo.ToLocalDate(expires).ToString("dd/MM/yyyy").</p>
+            }
+        }
+        else
+        {
+            <p class="ph-note mb-0">
+                Por segurança, o link só aparece uma vez, logo depois do cadastro. Se ele não foi enviado,
+                será possível gerar um novo no cadastro do aluno.
+            </p>
+        }
+    </section>
+
+    @if (_whatsAppUrl is not null)
+    {
+        <div class="ph-stack">
+            <a href="@_whatsAppUrl" target="_blank" rel="noopener noreferrer" class="ph-btn ph-btn-primary ph-btn-block">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.5 8.5 0 1 1 21 11.5z" /></svg>
+                <span>Enviar pelo WhatsApp</span>
+            </a>
+            <p class="ph-caption">Abre o seu WhatsApp com a mensagem pronta para @WhatsAppInvite.FirstName(_view.StudentName).</p>
+        </div>
+    }
+
+    <a href="/personal/alunos" class="ph-link-center">Voltar para alunos</a>
+}
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public Guid PersonalStudentId { get; set; }
+
+    private InviteCreatedView? _view;
+    private string? _inviteUrl;
+    private string? _whatsAppUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // O HTML pode conter o link: não guardar em cache nem enviar Referer ao abrir o WhatsApp.
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        HttpContext.Response.Headers["Referrer-Policy"] = "no-referrer";
+
+        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        _view = await Query.GetAsync(userId, PersonalStudentId, HttpContext.RequestAborted);
+        if (_view is null)
+        {
+            // Vínculo de outro personal ou inexistente: mesma resposta, sem revelar qual dos dois.
+            Navigation.NotFound();
+            return;
+        }
+
+        var token = Handoff.Take(HttpContext, userId, PersonalStudentId);
+        if (token is not null)
+        {
+            _inviteUrl = Navigation.ToAbsoluteUri($"/convite/{token}").ToString();
+            _whatsAppUrl = WhatsAppInvite.Url(_view.StudentPhone,
+                WhatsAppInvite.Message(_view.StudentName, _view.PersonalName, _inviteUrl));
+        }
+    }
+}

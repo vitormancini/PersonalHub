@@ -1,0 +1,22 @@
+@* Página provisória dos textos legais. O conteúdo definitivo depende de orientação jurídica (LGPD). *@
+
+<PageTitle>@Title · PersonalHub</PageTitle>
+
+<div class="ph-auth ph-invite">
+    <header class="ph-auth-hero">
+        <div class="ph-invite-inner">
+            <PhLogo />
+            <h1 class="ph-auth-hero-title">@Title</h1>
+        </div>
+    </header>
+    <main class="ph-auth-main">
+        <div class="ph-invite-inner">
+            <p>Texto em elaboração.</p>
+        </div>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = default!;
+}

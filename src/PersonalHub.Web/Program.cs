@@ -2,6 +2,7 @@ using PersonalHub.Web.Components;
 using PersonalHub.Web.Features.Authentication.Login;
 using PersonalHub.Web.Features.Authentication.Logout;
 using PersonalHub.Web.Features.Authentication.ProvisionPersonal;
+using PersonalHub.Web.Features.Students;
 using PersonalHub.Web.Infrastructure.Identity;
 using PersonalHub.Web.Infrastructure.Observability;
 using PersonalHub.Web.Infrastructure.Persistence;
@@ -24,6 +25,8 @@ builder.Services.AddAppIdentityCore();
 builder.Services.AddAppAuthentication();
 builder.Services.AddLoginRateLimiting();
 builder.Services.AddScoped<LoginHandler>();
+builder.Services.AddStudents();
+builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();
 

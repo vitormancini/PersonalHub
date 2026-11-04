@@ -757,6 +757,10 @@ namespace PersonalHub.Web.Infrastructure.Persistence.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("FullName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
 

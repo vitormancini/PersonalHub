@@ -36,6 +36,8 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 | D-028 | Fim do vínculo | Vínculo inativado, sem apagar histórico (resolve P-017 em parte) |
 | D-029 | Modelo de dados | Modelo relacional descrito em `DOMAIN_AND_DATABASE.md` |
 | D-030 | Recuperação de senha | Via WhatsApp na Fase 6; sem link no login até lá |
+| D-031 | Envio do convite | Pelo WhatsApp do próprio personal (link wa.me com mensagem pronta) até a Fase 6 |
+| D-032 | Nome do aluno na conta | Coluna `FullName` em `AspNetUsers`, preenchida pelo aluno no aceite |
 
 ## Pendências que exigem decisão
 
@@ -188,6 +190,24 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 - Decisão: a recuperação de senha será feita via WhatsApp na Fase 6. Até lá, a tela de login não exibe o link "Esqueci minha senha".
 - Alternativas consideradas: recuperação por e-mail desde a Fase 1.
 - Consequências: até a Fase 6, quem esquecer a senha depende de suporte manual; o fluxo entra junto com o provedor de WhatsApp (P-013).
+- Aprovado por: Vítor Mancini
+
+### D-031 — Convite enviado pelo WhatsApp do próprio personal
+- Data: 2026-11-04
+- Estado: Aprovada
+- Contexto: design do fluxo de cadastro e convite do aluno (Fase 1). O provedor de WhatsApp (P-013) só será escolhido na Fase 6.
+- Decisão: até a Fase 6, o convite é enviado pelo WhatsApp do próprio personal: a tela mostra o link e um botão que abre `https://wa.me/<número>?text=<mensagem pronta>`. O PersonalHub não envia nada sozinho.
+- Alternativas consideradas: envio por e-mail; esperar o provedor de WhatsApp.
+- Consequências: o link só aparece uma vez, logo após o cadastro (o token não é gravado). Reenvio fica para a Fase 2. Na Fase 6 o envio pode passar para a outbox sem mudar o modelo do convite.
+- Aprovado por: Vítor Mancini
+
+### D-032 — Nome informado pelo aluno na conta
+- Data: 2026-11-04
+- Estado: Aprovada
+- Contexto: a tela de aceite do convite tem o campo "Seu nome", editável. O vínculo guarda o nome que o personal digitou (D-015) e não deve ser sobrescrito pelo aluno.
+- Decisão: nova coluna `FullName varchar(150) null` em `AspNetUsers` (migration `AddUserFullName`), preenchida pelo aluno ao criar a conta. Nula para personais (nome em `PersonalProfile`).
+- Alternativas consideradas: atualizar `PersonalStudent.StudentName` (quebraria D-015); descartar o nome digitado.
+- Consequências: cada personal continua vendo o nome que cadastrou; o nome da conta servirá à área do aluno.
 - Aprovado por: Vítor Mancini
 
 ## Modelo para novas decisões

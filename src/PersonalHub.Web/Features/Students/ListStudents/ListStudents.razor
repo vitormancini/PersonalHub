@@ -1,0 +1,12 @@
+@page "/personal/alunos"
+@attribute [Authorize(Roles = AppRoles.Personal)]
+@layout PersonalLayout
+
+@* A lista de alunos chega na Fase 2; por enquanto, só o acesso ao cadastro. *@
+
+<PersonalPageHeader Title="Alunos" />
+
+<div class="ph-card">
+    <p>A lista dos seus alunos vai aparecer aqui. Por enquanto, você já pode cadastrar alunos e enviar o convite.</p>
+    <a href="/personal/alunos/novo" class="ph-btn ph-btn-primary ph-btn-block">Novo aluno</a>
+</div>

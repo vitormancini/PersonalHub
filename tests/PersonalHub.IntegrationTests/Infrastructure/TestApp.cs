@@ -7,8 +7,8 @@ namespace PersonalHub.IntegrationTests.Infrastructure;
 public static class TestApp
 {
     /// <summary>
-    /// Host de teste ligado ao banco de testes. O limite de login por IP fica alto para não interferir;
-    /// o teste de rate limiting passa o próprio valor em <paramref name="settings"/>.
+    /// Host de teste ligado ao banco de testes. Os limites por IP (login e convite) ficam altos para não interferir;
+    /// os testes de rate limiting passam o próprio valor em <paramref name="settings"/>.
     /// </summary>
     public static WebApplicationFactory<Program> Create(
         string connectionString,
@@ -20,6 +20,7 @@ public static class TestApp
             builder.UseEnvironment("Testing");
             builder.UseSetting("ConnectionStrings:PersonalHub", connectionString);
             builder.UseSetting("Authentication:LoginRateLimit:PermitLimit", "1000");
+            builder.UseSetting("Students:InviteRateLimit:PermitLimit", "1000");
             foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
             {
                 builder.UseSetting(key, value);

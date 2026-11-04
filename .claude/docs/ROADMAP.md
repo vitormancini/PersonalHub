@@ -15,13 +15,13 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
 - [x] Login/logout.
 - [x] Roles Personal e Student.
 - [x] Provisionamento manual de personal.
-- [ ] Fluxo seguro de criação/convite de aluno.
+- [x] Fluxo seguro de criação/convite de aluno (2026-11-04).
 - [ ] Autorização e isolamento de dados.
   Critério: usuários autenticados acessam apenas funcionalidades e dados do próprio perfil/vínculo.
 
 ## Fase 2 — Alunos
 - [ ] Listar alunos.
-- [ ] Cadastrar aluno.
+- [ ] Cadastrar aluno. Entregue em parte na Fase 1 (cadastro + convite); faltam reenvio/revogação do convite e a ligação com a lista e os detalhes.
 - [ ] Consultar detalhes.
 - [ ] Editar dados permitidos.
 - [ ] Ativar/inativar vínculo.
