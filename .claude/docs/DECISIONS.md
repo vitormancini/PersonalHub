@@ -37,7 +37,7 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 | D-029 | Modelo de dados | Modelo relacional descrito em `DOMAIN_AND_DATABASE.md` |
 | D-030 | Recuperação de senha | Via WhatsApp na Fase 6; sem link no login até lá |
 | D-031 | Envio do convite | Pelo WhatsApp do próprio personal (link wa.me com mensagem pronta) até a Fase 6 |
-| D-032 | Nome do aluno na conta | Coluna `FullName` em `AspNetUsers`, preenchida pelo aluno no aceite (proposta) |
+| D-032 | Nome do aluno na conta | Coluna `FullName` em `AspNetUsers`, preenchida pelo aluno no aceite |
 
 ## Pendências que exigem decisão
 
@@ -203,12 +203,12 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 
 ### D-032 — Nome informado pelo aluno na conta
 - Data: 2026-11-04
-- Estado: Proposta (implementada com o design aprovado da Fase 1; aguarda confirmação)
+- Estado: Aprovada
 - Contexto: a tela de aceite do convite tem o campo "Seu nome", editável. O vínculo guarda o nome que o personal digitou (D-015) e não deve ser sobrescrito pelo aluno.
 - Decisão: nova coluna `FullName varchar(150) null` em `AspNetUsers` (migration `AddUserFullName`), preenchida pelo aluno ao criar a conta. Nula para personais (nome em `PersonalProfile`).
 - Alternativas consideradas: atualizar `PersonalStudent.StudentName` (quebraria D-015); descartar o nome digitado.
 - Consequências: cada personal continua vendo o nome que cadastrou; o nome da conta servirá à área do aluno.
-- Aprovado por: pendente
+- Aprovado por: Vítor Mancini
 
 ## Modelo para novas decisões
 
