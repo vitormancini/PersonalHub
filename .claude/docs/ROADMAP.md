@@ -4,12 +4,12 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
 
 ## Fase 0 — Descoberta e fundação
 - [x] Inspecionar repositório existente.
-- [ ] Confirmar versão do SDK e estrutura da solução.
+- [x] Confirmar versão do SDK e estrutura da solução.
 - [x] Resolver decisões de domínio pendentes que bloqueiam o banco (D-015 a D-029, 2026-11-03).
 - [x] Apresentar diagrama ER e estados.
 - [x] Aprovar arquitetura e modelo de dados (2026-11-03).
-- [ ] Configurar solução, PostgreSQL Docker e migrations iniciais após aprovação.
-- [ ] Configurar logs estruturados, health checks e ambientes.
+- [x] Configurar solução, PostgreSQL Docker e migrations iniciais após aprovação.
+- [x] Configurar logs estruturados, health checks e ambientes.
 
 ## Fase 1 — Identidade e acesso
 - [ ] Login/logout.
