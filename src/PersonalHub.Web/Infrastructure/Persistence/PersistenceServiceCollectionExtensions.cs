@@ -1,0 +1,38 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using PersonalHub.Web.Infrastructure.Identity;
+
+namespace PersonalHub.Web.Infrastructure.Persistence;
+
+public static class PersistenceServiceCollectionExtensions
+{
+    public const string ConnectionStringName = "PersonalHub";
+
+    public static IServiceCollection AddPersistence(this IServiceCollection services)
+    {
+        // A connection string é lida ao criar o DbContext, assim testes e ferramentas podem sobrescrevê-la.
+        services.AddDbContext<AppDbContext>((serviceProvider, options) =>
+        {
+            var connectionString = serviceProvider.GetRequiredService<IConfiguration>()
+                .GetConnectionString(ConnectionStringName);
+
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException(
+                    $"Connection string '{ConnectionStringName}' não configurada. Veja o README (dotnet user-secrets).");
+            }
+
+            options.UseNpgsql(connectionString);
+        });
+
+        // Somente o núcleo do Identity (usuários, roles e stores). Cookies e telas de login entram na Fase 1.
+        services.AddIdentityCore<ApplicationUser>(options => options.User.RequireUniqueEmail = true)
+            .AddRoles<IdentityRole<Guid>>()
+            .AddEntityFrameworkStores<AppDbContext>();
+
+        services.AddHealthChecks()
+            .AddDbContextCheck<AppDbContext>("database");
+
+        return services;
+    }
+}
