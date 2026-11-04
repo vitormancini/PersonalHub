@@ -115,7 +115,7 @@ erDiagram
 ## 4. Tabelas
 
 ### 4.1 Identity
-ASP.NET Core Identity com chaves `Guid` e duas roles: `Personal` e `Student`. Nenhuma tabela de senha própria. Não permitir autoelevação para a role `Personal`.
+ASP.NET Core Identity com chaves `Guid` e duas roles: `Personal` e `Student`. Nenhuma tabela de senha própria. `AspNetUsers.FullName varchar(150) null` guarda o nome que o aluno informou no aceite do convite (D-032). Não permitir autoelevação para a role `Personal`.
 
 ### 4.2 PersonalProfile
 

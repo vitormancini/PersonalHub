@@ -4,7 +4,8 @@ namespace PersonalHub.Web.Infrastructure.Observability;
 
 /// <summary>
 /// Uma linha de log por requisição HTTP: método, caminho, status e duração. O correlation ID vem do escopo.
-/// Não registra query string (pode conter tokens de convite), corpo nem headers.
+/// Não registra query string, corpo nem headers, e troca segredos do caminho (o token em /convite/{token})
+/// por "[redacted]".
 /// </summary>
 public partial class RequestLoggingMiddleware(RequestDelegate next, ILogger<RequestLoggingMiddleware> logger)
 {
@@ -27,7 +28,7 @@ public partial class RequestLoggingMiddleware(RequestDelegate next, ILogger<Requ
         {
             // Se a exceção escapar daqui (Development, sem exception handler), registra 500.
             var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
-            LogRequest(logger, context.Request.Method, context.Request.Path.Value ?? "/",
+            LogRequest(logger, context.Request.Method, SafePath(context.Request.Path),
                 statusCode, Math.Round(elapsedMs, 1));
         }
     }
@@ -38,6 +39,12 @@ public partial class RequestLoggingMiddleware(RequestDelegate next, ILogger<Requ
         || path.StartsWithSegments("/_framework")
         || path.StartsWithSegments("/_content")
         || Path.HasExtension(path.Value);
+
+    /// <summary>Caminho seguro para log: o token do convite dá acesso à criação da conta do aluno.</summary>
+    internal static string SafePath(PathString path) =>
+        path.StartsWithSegments("/convite", StringComparison.OrdinalIgnoreCase, out var rest) && rest.HasValue
+            ? "/convite/[redacted]"
+            : path.Value ?? "/";
 
     [LoggerMessage(EventId = 1000, Level = LogLevel.Information,
         Message = "HTTP {Method} {Path} respondeu {StatusCode} em {ElapsedMs} ms")]

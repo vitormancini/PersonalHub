@@ -64,3 +64,53 @@ window.addEventListener('pageshow', (event) => {
         button.disabled = false;
     });
 });
+
+// Copiar texto: <button data-ph-copy="id-do-elemento" data-ph-copied-text="Link copiado">.
+document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-ph-copy]');
+    if (!button) {
+        return;
+    }
+
+    const source = document.getElementById(button.dataset.phCopy);
+    if (!source) {
+        return;
+    }
+
+    const text = source.textContent.trim();
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch {
+        // Sem permissão de clipboard (HTTP, navegador antigo): seleciona o texto para o usuário copiar.
+        const range = document.createRange();
+        range.selectNodeContents(source);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return;
+    }
+
+    const label = button.querySelector('.ph-btn-text');
+    label.textContent = button.dataset.phCopiedText ?? 'Copiado';
+});
+
+// Regras de senha ao vivo: <ul data-ph-password-rules="id-do-input"> com <li data-rule="length|upper|lower|digit">.
+// Só ajuda visual; as regras valem no servidor (Identity).
+const passwordRules = {
+    length: (value) => value.length >= 8,
+    upper: (value) => /[A-Z]/.test(value),
+    lower: (value) => /[a-z]/.test(value),
+    digit: (value) => /[0-9]/.test(value)
+};
+
+document.addEventListener('input', (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || !input.id) {
+        return;
+    }
+
+    document.querySelectorAll(`[data-ph-password-rules="${CSS.escape(input.id)}"] [data-rule]`).forEach((item) => {
+        const met = passwordRules[item.dataset.rule]?.(input.value) ?? false;
+        item.dataset.met = String(met);
+    });
+});

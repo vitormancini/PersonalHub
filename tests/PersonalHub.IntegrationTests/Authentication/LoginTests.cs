@@ -42,7 +42,7 @@ public sealed class LoginTests(DatabaseFixture fixture) : IAsyncLifetime
         Assert.Equal(home, response.RedirectTarget());
         var page = await _client.GetAsync(home);
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
-        Assert.Contains("Início", await page.Content.ReadAsStringAsync());
+        Assert.Contains("Início", WebUtility.HtmlDecode(await page.Content.ReadAsStringAsync()));
     }
 
     [Fact]

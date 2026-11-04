@@ -1,0 +1,131 @@
+@page "/personal/alunos/novo"
+@attribute [Authorize(Roles = AppRoles.Personal)]
+@layout PersonalLayout
+@using PersonalHub.Web.Features.Authentication
+@inject CreateStudentHandler Handler
+@inject CreatedInviteHandoff Handoff
+@inject NavigationManager Navigation
+
+@* SSR estático com antiforgery, como o login. Toda validação acontece no CreateStudentHandler. *@
+
+<PersonalPageHeader Title="Novo aluno" BackHref="/personal/alunos" BackLabel="Voltar para alunos" />
+
+<p class="ph-page-intro">Depois do cadastro você recebe um link de convite para enviar ao aluno.</p>
+
+<EditForm EditContext="_editContext" FormName="novo-aluno" OnSubmit="SubmitAsync" novalidate class="ph-form" data-ph-busy-form>
+    @if (_outcome == CreateStudentOutcome.DuplicateEmail)
+    {
+        <div class="ph-alert ph-alert-danger" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>Você já tem um aluno com este e-mail. Abra o cadastro dele para reenviar o convite.</p>
+        </div>
+    }
+
+    <section class="ph-section-card" aria-labelledby="dados-aluno">
+        <h2 id="dados-aluno" class="ph-section-title">Dados do aluno</h2>
+
+        <div class="ph-field">
+            <label for="aluno-nome" class="ph-label">Nome completo</label>
+            <InputText id="aluno-nome" @bind-Value="Input.Name" class="ph-input" autocomplete="off"
+                       autocapitalize="words" maxlength="150" aria-describedby="aluno-nome-error" />
+            <ValidationMessage For="() => Input.Name" id="aluno-nome-error" class="ph-field-error" />
+        </div>
+
+        <div class="ph-field">
+            <label for="aluno-email" class="ph-label">E-mail</label>
+            <InputText id="aluno-email" type="email" @bind-Value="Input.Email" class="ph-input" autocomplete="off"
+                       inputmode="email" autocapitalize="none" spellcheck="false" maxlength="256"
+                       placeholder="aluno@exemplo.com" aria-describedby="aluno-email-hint aluno-email-error" />
+            <span id="aluno-email-hint" class="ph-field-hint">Será o login do aluno.</span>
+            <ValidationMessage For="() => Input.Email" id="aluno-email-error" class="ph-field-error" />
+        </div>
+
+        <div class="ph-field">
+            <label for="aluno-celular" class="ph-label">Celular com WhatsApp</label>
+            <InputText id="aluno-celular" type="tel" @bind-Value="Input.Phone" class="ph-input" autocomplete="off"
+                       inputmode="tel" maxlength="25" placeholder="(11) 99999-8888" aria-describedby="aluno-celular-error" />
+            <ValidationMessage For="() => Input.Phone" id="aluno-celular-error" class="ph-field-error" />
+        </div>
+    </section>
+
+    <section class="ph-section-card" aria-labelledby="cobranca">
+        <h2 id="cobranca" class="ph-section-title">Cobrança</h2>
+
+        <div class="ph-grid-2">
+            <div class="ph-field">
+                <label for="aluno-valor" class="ph-label">Valor da aula</label>
+                <div class="ph-input-prefix">
+                    <span aria-hidden="true">R$</span>
+                    <InputText id="aluno-valor" @bind-Value="Input.LessonPrice" class="ph-input" autocomplete="off"
+                               inputmode="decimal" maxlength="12" placeholder="80,00" aria-describedby="aluno-valor-error" />
+                </div>
+                <ValidationMessage For="() => Input.LessonPrice" id="aluno-valor-error" class="ph-field-error" />
+            </div>
+
+            <div class="ph-field">
+                <label for="aluno-vencimento" class="ph-label">Dia do vencimento</label>
+                <InputSelect id="aluno-vencimento" @bind-Value="Input.BillingDueDay" class="ph-input ph-select"
+                             aria-describedby="aluno-vencimento-error">
+                    <option value="">Dia</option>
+                    @for (var day = 1; day <= 31; day++)
+                    {
+                        <option value="@day">@day</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => Input.BillingDueDay" id="aluno-vencimento-error" class="ph-field-error" />
+            </div>
+        </div>
+
+        <p class="ph-note">
+            No vencimento o aluno recebe o demonstrativo das aulas aprovadas no mês anterior.
+            Se o mês não tiver esse dia, vence no último dia.
+        </p>
+    </section>
+
+    <button type="submit" class="ph-btn ph-btn-primary ph-btn-block" data-ph-busy-text="Cadastrando…">
+        <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+        <span class="ph-btn-text">Cadastrar e gerar convite</span>
+    </button>
+</EditForm>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "novo-aluno")]
+    private CreateStudentInput Input { get; set; } = default!;
+
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _messages = default!;
+    private CreateStudentOutcome? _outcome;
+
+    protected override void OnInitialized()
+    {
+        Input ??= new CreateStudentInput();
+        _editContext = new EditContext(Input);
+        _messages = new ValidationMessageStore(_editContext);
+    }
+
+    private async Task SubmitAsync()
+    {
+        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        var result = await Handler.HandleAsync(
+            new CreateStudentCommand(userId, Input, HttpContext.TraceIdentifier), HttpContext.RequestAborted);
+
+        if (result.Outcome == CreateStudentOutcome.Succeeded)
+        {
+            // PRG: o token segue num cookie de leitura única; nunca na URL.
+            Handoff.Store(HttpContext, userId, result.PersonalStudentId!.Value, result.InviteToken!);
+            Navigation.NavigateTo($"/personal/alunos/{result.PersonalStudentId}/convite-criado");
+            return;
+        }
+
+        if (result.Outcome == CreateStudentOutcome.Forbidden)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+        }
+
+        _outcome = result.Outcome;
+        ServerValidation.Show(_editContext, _messages, result.Errors);
+    }
+}

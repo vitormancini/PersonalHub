@@ -95,6 +95,14 @@ Regras de acesso:
 - POST em `/entrar` é limitado a 10 por minuto por IP (`Authentication:LoginRateLimit`). Acima disso, a resposta é 429.
 - Personal inativo não entra. A mensagem é a mesma de senha errada, que também não revela se o e-mail existe.
 
+## Cadastro e convite do aluno
+
+O personal cadastra o aluno em **Alunos → Novo aluno** (`/personal/alunos/novo`). O vínculo nasce `Invited` e o sistema gera um convite de uso único, válido por 7 dias (D-016):
+- O link (`/convite/{token}`) aparece **uma única vez**, na página seguinte ao cadastro. O banco guarda só o SHA-256 do token. Recarregar a página não mostra o link de novo.
+- O botão **Enviar pelo WhatsApp** abre o WhatsApp do próprio personal com a mensagem pronta (`wa.me`, D-031). O PersonalHub não envia nada sozinho.
+- O aluno abre o link, cria a senha (ou entra com a senha atual, se o e-mail já tiver conta), aceita os termos e cai em `/aluno`.
+- O caminho `/convite/*` é limitado a 20 requisições por minuto por IP (`Students:InviteRateLimit`), responde com `Referrer-Policy: no-referrer` e aparece nos logs como `/convite/[redacted]`.
+
 ## Observabilidade
 
 **Logs.** A aplicação escreve logs no console, com o formato definido pelo ambiente:
@@ -107,7 +115,7 @@ Os níveis por categoria ficam em `appsettings.json`, `appsettings.Development.j
 ASPNETCORE_ENVIRONMENT=Production ConnectionStrings__PersonalHub="Host=localhost;..." dotnet run --project src/PersonalHub.Web --no-launch-profile
 ```
 
-Cada requisição HTTP gera uma linha com método, caminho, status e duração. Ficam de fora `/health` e os arquivos estáticos. A query string, os corpos e os headers nunca são registrados.
+Cada requisição HTTP gera uma linha com método, caminho, status e duração. Ficam de fora `/health` e os arquivos estáticos. A query string, os corpos e os headers nunca são registrados, e o token do convite sai como `/convite/[redacted]`. A categoria `Microsoft.AspNetCore.Hosting.Diagnostics` fica desligada em código: o escopo de log dela (`RequestPath`) copiaria o caminho bruto, com o token, para todas as linhas da requisição.
 
 **Correlation ID.** Toda resposta traz o header `X-Correlation-ID`:
 - Se a requisição já trouxer um valor válido (até 64 caracteres, só letras, dígitos e hífen), ele é mantido.

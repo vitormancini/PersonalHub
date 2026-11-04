@@ -1,0 +1,28 @@
+@* Preenche o cabeçalho do PersonalLayout: título (também usado no <title>) e, opcionalmente, o botão voltar. *@
+
+<PageTitle>@Title · PersonalHub</PageTitle>
+
+<SectionContent SectionName="@TitleSection">@Title</SectionContent>
+
+@if (BackHref is not null)
+{
+    <SectionContent SectionName="@BackSection">
+        <a href="@BackHref" class="ph-shell-back" aria-label="@BackLabel">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6" /></svg>
+        </a>
+    </SectionContent>
+}
+
+@code {
+    public const string TitleSection = "ph-shell-title";
+    public const string BackSection = "ph-shell-back";
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = default!;
+
+    [Parameter]
+    public string? BackHref { get; set; }
+
+    [Parameter]
+    public string BackLabel { get; set; } = "Voltar";
+}
