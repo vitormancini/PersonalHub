@@ -35,6 +35,7 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 | D-027 | Admin | Personal provisionado por script de linha de comando versionado (resolve P-016) |
 | D-028 | Fim do vínculo | Vínculo inativado, sem apagar histórico (resolve P-017 em parte) |
 | D-029 | Modelo de dados | Modelo relacional descrito em `DOMAIN_AND_DATABASE.md` |
+| D-030 | Recuperação de senha | Via WhatsApp na Fase 6; sem link no login até lá |
 
 ## Pendências que exigem decisão
 
@@ -178,6 +179,15 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 - Estado: Aprovada
 - Contexto: Fase 0 do roadmap.
 - Decisão: modelo descrito em `DOMAIN_AND_DATABASE.md`: chaves `uuid`, dinheiro `numeric(12,2)`, concorrência otimista por `xmin`, exclusão de aula como `DeletedAtUtc` separado da decisão do aluno.
+- Aprovado por: Vítor Mancini
+
+### D-030 — Recuperação de senha via WhatsApp
+- Data: 2026-11-04
+- Estado: Aprovada
+- Contexto: design da tela de login (Fase 1).
+- Decisão: a recuperação de senha será feita via WhatsApp na Fase 6. Até lá, a tela de login não exibe o link "Esqueci minha senha".
+- Alternativas consideradas: recuperação por e-mail desde a Fase 1.
+- Consequências: até a Fase 6, quem esquecer a senha depende de suporte manual; o fluxo entra junto com o provedor de WhatsApp (P-013).
 - Aprovado por: Vítor Mancini
 
 ## Modelo para novas decisões

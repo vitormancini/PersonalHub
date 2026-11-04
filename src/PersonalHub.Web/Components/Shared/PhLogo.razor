@@ -1,0 +1,18 @@
+@* Símbolo (P com halter) + wordmark. O texto "PersonalHub" é o nome acessível; o SVG é decorativo. *@
+<span class="ph-logo @Class">
+    <svg class="ph-logo-symbol" viewBox="0 0 34 40" aria-hidden="true" focusable="false">
+        <path fill-rule="evenodd" d="M5 2h14a11 11 0 0 1 0 22h-6v10H5z M13 9v8h6a4 4 0 0 0 0-8z" />
+        <rect x="0" y="34" width="4" height="6" rx="1" />
+        <rect x="4" y="35.5" width="3" height="3" />
+        <rect x="7" y="36.25" width="12" height="1.5" />
+        <rect x="19" y="35.5" width="3" height="3" />
+        <rect x="22" y="34" width="4" height="6" rx="1" />
+    </svg>
+    <span class="ph-logo-wordmark">Personal<span class="ph-logo-accent">Hub</span></span>
+</span>
+
+@code {
+    /// <summary>Classe extra de tamanho, por exemplo <c>ph-logo-lg</c> ou <c>ph-logo-sm</c>.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+}

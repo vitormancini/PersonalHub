@@ -91,14 +91,15 @@ public class ObservabilityTests
     {
         var logs = new CapturingLoggerProvider();
         await using var factory = CreateFactory("Testing", logs);
-        var request = new HttpRequestMessage(HttpMethod.Get, "/?token=valor-secreto");
+        // "/" agora redireciona; /entrar é uma página pública que responde 200 sem banco.
+        var request = new HttpRequestMessage(HttpMethod.Get, "/entrar?token=valor-secreto");
         request.Headers.Add(CorrelationId.HeaderName, "log-teste-1");
 
         await factory.CreateClient().SendAsync(request);
 
         var requestLog = Assert.Single(logs.Logs, log => log.Category == typeof(RequestLoggingMiddleware).FullName);
         Assert.Equal("log-teste-1", requestLog.Scope["CorrelationId"]);
-        Assert.Contains("GET / respondeu 200", requestLog.Message);
+        Assert.Contains("GET /entrar respondeu 200", requestLog.Message);
         Assert.DoesNotContain(logs.Logs, log => log.Message.Contains("valor-secreto"));
     }
 

@@ -72,6 +72,29 @@ dotnet run --project src/PersonalHub.Web
 
 A URL aparece no terminal. O health check fica em `/health` e inclui a conexão com o PostgreSQL.
 
+## Login e provisionamento de personal
+
+A aplicação abre em `/entrar`. Após o login, o personal vai para `/personal` e o aluno para `/aluno`. Para sair, use o botão **Sair** (POST `/sair`).
+
+Não há tela de cadastro de personal (D-027). Para criar um, rode o comando de provisionamento (o servidor web não sobe):
+
+```bash
+dotnet run --project src/PersonalHub.Web -- provision-personal --email ana@exemplo.com --name "Ana Souza" --phone +5511999990000
+```
+
+- `--phone` é opcional e usa o formato internacional (E.164).
+- A senha é pedida duas vezes no terminal, sem aparecer na tela. Para automação, ela pode vir por pipe (uma linha). Nunca passe a senha como argumento.
+- Regras: mínimo de 8 caracteres, com maiúscula, minúscula e número.
+- Usuário, role `Personal`, `PersonalProfile` ativo e registro de auditoria são gravados numa única transação.
+- Saída: código 0 (criado), 1 (dados ou senha recusados) ou 2 (uso incorreto).
+
+Regras de acesso:
+- Cookie `__Host-PersonalHub.Auth`: HttpOnly, Secure e SameSite=Lax. Use o perfil `https` (`dotnet run --project src/PersonalHub.Web --launch-profile https`): em HTTP puro o browser não guarda o cookie.
+- "Manter conectado" mantém a sessão por 14 dias (renovada com o uso). Sem a opção, o cookie dura até fechar o browser.
+- 5 senhas erradas seguidas bloqueiam a conta por 15 minutos.
+- POST em `/entrar` é limitado a 10 por minuto por IP (`Authentication:LoginRateLimit`). Acima disso, a resposta é 429.
+- Personal inativo não entra. A mensagem é a mesma de senha errada, que também não revela se o e-mail existe.
+
 ## Observabilidade
 
 **Logs.** A aplicação escreve logs no console, com o formato definido pelo ambiente:

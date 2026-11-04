@@ -12,9 +12,9 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
 - [x] Configurar logs estruturados, health checks e ambientes.
 
 ## Fase 1 — Identidade e acesso
-- [ ] Login/logout.
-- [ ] Roles Personal e Student.
-- [ ] Provisionamento manual de personal.
+- [x] Login/logout.
+- [x] Roles Personal e Student.
+- [x] Provisionamento manual de personal.
 - [ ] Fluxo seguro de criação/convite de aluno.
 - [ ] Autorização e isolamento de dados.
   Critério: usuários autenticados acessam apenas funcionalidades e dados do próprio perfil/vínculo.
