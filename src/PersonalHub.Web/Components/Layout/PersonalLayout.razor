@@ -8,6 +8,7 @@
         <div class="ph-shell-header-inner">
             <SectionOutlet SectionName="@PersonalPageHeader.BackSection" />
             <h1 class="ph-shell-title" tabindex="-1"><SectionOutlet SectionName="@PersonalPageHeader.TitleSection" /></h1>
+            <SectionOutlet SectionName="@PersonalPageHeader.ActionSection" />
             @* POST com antiforgery: um link GET permitiria deslogar o usuário a partir de outro site. *@
             <form method="post" action="/sair" class="m-0">
                 <AntiforgeryToken />

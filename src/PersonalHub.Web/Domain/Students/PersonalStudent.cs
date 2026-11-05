@@ -23,4 +23,36 @@ public class PersonalStudent
     public DateTime? ActivatedAtUtc { get; set; }
     public DateTime? EndedAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; }
+
+    /// <summary>
+    /// O personal só troca o e-mail enquanto o convite não foi aceito (D-035). Depois, o e-mail é o login do aluno.
+    /// </summary>
+    public bool CanEditEmail => Status == PersonalStudentStatus.Invited;
+
+    /// <summary>Encerra o vínculo sem apagar histórico (D-028, D-037).</summary>
+    public void Inactivate(DateTime nowUtc)
+    {
+        if (Status == PersonalStudentStatus.Inactive)
+        {
+            throw new InvalidOperationException("O vínculo já está inativo.");
+        }
+
+        Status = PersonalStudentStatus.Inactive;
+        EndedAtUtc = nowUtc;
+    }
+
+    /// <summary>
+    /// Reabre o vínculo (D-037): volta para <c>Active</c> se o aluno já tem conta; senão, para <c>Invited</c>,
+    /// e o personal precisa gerar um novo convite.
+    /// </summary>
+    public void Reactivate()
+    {
+        if (Status != PersonalStudentStatus.Inactive)
+        {
+            throw new InvalidOperationException("Só um vínculo inativo pode ser reativado.");
+        }
+
+        Status = StudentUserId is null ? PersonalStudentStatus.Invited : PersonalStudentStatus.Active;
+        EndedAtUtc = null;
+    }
 }

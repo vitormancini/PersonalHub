@@ -1,0 +1,166 @@
+@page "/personal/alunos/{PersonalStudentId:guid}/vinculo"
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
+@layout PersonalLayout
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Domain.Students
+@using PersonalHub.Web.Features.Students.CreateStudent
+@using PersonalHub.Web.Features.Students.StudentDetails
+@inject StudentDetailsQuery Query
+@inject ChangeLinkStatusHandler Handler
+@inject CreatedInviteHandoff Handoff
+@inject NavigationManager Navigation
+
+@* Confirmação de inativar/reativar como página própria (não um modal): funciona sem JavaScript, o foco começa no
+   título e o botão voltar do celular cancela. A ação é um POST com antiforgery. *@
+
+<PersonalPageHeader Title="@(_inactive ? "Reativar vínculo" : "Inativar vínculo")" BackHref="@DetailsHref" BackLabel="Voltar para o aluno" />
+
+@if (_view is null)
+{
+    return;
+}
+
+<section class="ph-confirm" aria-labelledby="confirmar-titulo">
+    @if (_view.EmailInUse)
+    {
+        <h2 id="confirmar-titulo" class="ph-confirm-title">Não é possível reativar o vínculo com @_view.StudentName</h2>
+        <div class="ph-alert ph-alert-danger" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>
+                Você já tem outro aluno ativo com o e-mail <strong>@_view.StudentEmail</strong>. Inative aquele cadastro
+                antes de reativar este.
+            </p>
+        </div>
+        <a href="@DetailsHref" class="ph-btn ph-btn-primary ph-btn-block">Voltar</a>
+    }
+    else
+    {
+        <h2 id="confirmar-titulo" class="ph-confirm-title">
+            @(_inactive ? "Reativar" : "Inativar") o vínculo com @_view.StudentName?
+        </h2>
+
+        <ul class="ph-consequences">
+            @if (!_inactive)
+            {
+                <li>O histórico de aulas e pagamentos continua disponível.</li>
+                <li>Não será possível registrar novas aulas para este aluno.</li>
+                @if (_view.Status == PersonalStudentStatus.Invited)
+                {
+                    <li>O convite em aberto deixa de funcionar na hora.</li>
+                }
+                <li>Você pode reativar o vínculo quando quiser.</li>
+            }
+            else if (_view.HasAccount)
+            {
+                <li>O vínculo volta a ficar ativo e você pode registrar novas aulas.</li>
+                <li>Valor da aula e vencimento continuam os mesmos: @StudentDisplay.Money(_view.LessonPrice) por aula, dia @_view.BillingDueDay.</li>
+                <li>O histórico anterior continua disponível.</li>
+            }
+            else
+            {
+                <li>@WhatsAppInvite.FirstName(_view.StudentName) ainda não criou a conta, então o vínculo volta como convidado.</li>
+                <li>Um novo link de convite é gerado para você enviar pelo WhatsApp. Ele vale por 7 dias.</li>
+                <li>Valor da aula e vencimento continuam os mesmos: @StudentDisplay.Money(_view.LessonPrice) por aula, dia @_view.BillingDueDay.</li>
+            }
+        </ul>
+
+        <form method="post" @formname="vinculo" @onsubmit="ConfirmAsync" class="ph-stack-tight" data-ph-busy-form>
+            <AntiforgeryToken />
+            <input type="hidden" name="acao" value="@(_inactive ? Reactivate : Inactivate)" />
+            @if (_inactive)
+            {
+                <button type="submit" class="ph-btn ph-btn-primary ph-btn-block" data-ph-busy-text="Reativando…">
+                    <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span class="ph-btn-text">@(_view.HasAccount ? "Reativar vínculo" : "Reativar e gerar convite")</span>
+                </button>
+            }
+            else
+            {
+                <button type="submit" class="ph-btn ph-btn-danger ph-btn-block" data-ph-busy-text="Inativando…">
+                    <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span class="ph-btn-text">Inativar vínculo</span>
+                </button>
+            }
+            <a href="@DetailsHref" class="ph-btn ph-btn-outline ph-btn-block">Cancelar</a>
+        </form>
+    }
+</section>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public Guid PersonalStudentId { get; set; }
+
+    private const string Inactivate = "inativar";
+    private const string Reactivate = "reativar";
+
+    /// <summary>A ação que a página mostrava. Se outra aba já mudou a situação, o pedido não vira a ação oposta.</summary>
+    [SupplyParameterFromForm(FormName = "vinculo", Name = "acao")]
+    private string? RequestedAction { get; set; }
+
+    private StudentDetailsView? _view;
+    private bool _inactive;
+
+    private string DetailsHref => $"/personal/alunos/{PersonalStudentId}";
+
+    private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _view = await Query.GetAsync(UserId, PersonalStudentId, HttpContext.RequestAborted);
+        if (_view is null)
+        {
+            // Vínculo de outro personal ou inexistente: mesma resposta, sem revelar qual dos dois.
+            Navigation.NotFound();
+            return;
+        }
+
+        _inactive = _view.Status == PersonalStudentStatus.Inactive;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (RequestedAction is not (Inactivate or Reactivate))
+        {
+            Navigation.NavigateTo(DetailsHref);
+            return;
+        }
+
+        // O handler confere a situação dentro da transação: pedir para inativar um vínculo já inativo dá AlreadyDone.
+        var reactivate = RequestedAction == Reactivate;
+        var correlationId = HttpContext.TraceIdentifier;
+        var result = reactivate
+            ? await Handler.ReactivateAsync(UserId, PersonalStudentId, correlationId, HttpContext.RequestAborted)
+            : await Handler.InactivateAsync(UserId, PersonalStudentId, correlationId, HttpContext.RequestAborted);
+
+        switch (result.Outcome)
+        {
+            case ChangeLinkStatusOutcome.ReactivatedWithInvite:
+                Handoff.Store(HttpContext, UserId, PersonalStudentId, result.InviteToken!);
+                Navigation.NavigateTo($"/personal/alunos/{PersonalStudentId}/convite-criado");
+                return;
+            case ChangeLinkStatusOutcome.Succeeded:
+                Navigation.NavigateTo($"{DetailsHref}?aviso={(reactivate ? "reativado" : "inativado")}");
+                return;
+            case ChangeLinkStatusOutcome.AlreadyDone:
+                // Outra aba ou duplo toque já fez a mudança: só mostra o resultado.
+                Navigation.NavigateTo(DetailsHref);
+                return;
+            case ChangeLinkStatusOutcome.EmailInUse:
+                await LoadAsync();
+                _view = _view is null ? null : _view with { EmailInUse = true };
+                return;
+            default:
+                _view = null;
+                Navigation.NotFound();
+                return;
+        }
+    }
+}

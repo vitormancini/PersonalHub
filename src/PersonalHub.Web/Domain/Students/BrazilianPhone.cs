@@ -55,6 +55,19 @@ public static class BrazilianPhone
         return IsNationalNumber(number) ? "+55" + number : null;
     }
 
+    /// <summary>"+5511987654321" vira "(11) 98765-4321"; fixo vira "(11) 2345-6789". Outros formatos voltam como estão.</summary>
+    public static string ToDisplay(string e164)
+    {
+        if (!e164.StartsWith("+55", StringComparison.Ordinal) || !IsNationalNumber(e164[3..]))
+        {
+            return e164;
+        }
+
+        var number = e164[3..];
+        var split = number.Length - 4;
+        return $"({number[..2]}) {number[2..split]}-{number[split..]}";
+    }
+
     private static bool IsNationalNumber(string number)
     {
         // DDDs válidos vão de 11 a 99 e não têm zero.

@@ -9,7 +9,8 @@ public sealed record InviteCreatedView(
     string StudentPhone,
     string PersonalName,
     PersonalStudentStatus Status,
-    DateTime? InviteExpiresAtUtc);
+    DateTime? InviteExpiresAtUtc,
+    int InviteCount);
 
 /// <summary>Dados da página "Convite do aluno". Só devolve o vínculo se ele pertencer ao personal logado e ativo.</summary>
 public sealed class InviteCreatedQuery(AppDbContext db)
@@ -28,6 +29,7 @@ public sealed class InviteCreatedQuery(AppDbContext db)
                     .Where(i => i.PersonalStudentId == x.s.Id)
                     .OrderByDescending(i => i.CreatedAtUtc)
                     .Select(i => (DateTime?)i.ExpiresAtUtc)
-                    .FirstOrDefault()))
+                    .FirstOrDefault(),
+                db.StudentInvites.Count(i => i.PersonalStudentId == x.s.Id)))
             .SingleOrDefaultAsync(cancellationToken);
 }
