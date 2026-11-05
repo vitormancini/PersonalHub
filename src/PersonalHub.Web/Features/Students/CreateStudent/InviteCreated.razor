@@ -10,7 +10,7 @@
 @inject NavigationManager Navigation
 @inject PublicUrls PublicUrls
 
-<PersonalPageHeader Title="Convite do aluno" BackHref="/personal/alunos" BackLabel="Voltar para alunos" />
+<PersonalPageHeader Title="Convite do aluno" BackHref="@DetailsHref" BackLabel="Voltar para o aluno" />
 
 @if (_view is not null)
 {
@@ -18,8 +18,17 @@
         <div class="ph-status-icon ph-status-success" aria-hidden="true">
             <svg viewBox="0 0 24 24" focusable="false"><path d="m5 12 5 5L20 7" /></svg>
         </div>
-        <h2 class="ph-result-title">Aluno cadastrado: @_view.StudentName</h2>
-        <p class="ph-result-text">Agora envie o convite. O link vale por 7 dias e só pode ser usado uma vez.</p>
+        @if (_view.InviteCount > 1)
+        {
+            @* Reenvio (D-034), troca de e-mail ou reativação: já existiu outro link para este aluno. *@
+            <h2 class="ph-result-title">Novo link para @_view.StudentName</h2>
+            <p class="ph-result-text">O link anterior não funciona mais. Este vale por 7 dias e só pode ser usado uma vez.</p>
+        }
+        else
+        {
+            <h2 class="ph-result-title">Aluno cadastrado: @_view.StudentName</h2>
+            <p class="ph-result-text">Agora envie o convite. O link vale por 7 dias e só pode ser usado uma vez.</p>
+        }
     </div>
 
     <section class="ph-section-card" aria-labelledby="link-convite">
@@ -47,8 +56,8 @@
         else
         {
             <p class="ph-note mb-0">
-                Por segurança, o link só aparece uma vez, logo depois do cadastro. Se ele não foi enviado,
-                será possível gerar um novo no cadastro do aluno.
+                Por segurança, o link só aparece uma vez, logo depois de gerado. Se ele não foi enviado,
+                gere um novo nos <a href="@DetailsHref">dados do aluno</a>.
             </p>
         }
     </section>
@@ -64,7 +73,7 @@
         </div>
     }
 
-    <a href="/personal/alunos" class="ph-link-center">Voltar para alunos</a>
+    <a href="@DetailsHref" class="ph-link-center">Ver dados do aluno</a>
 }
 
 @code {
@@ -75,6 +84,8 @@
     public Guid PersonalStudentId { get; set; }
 
     private InviteCreatedView? _view;
+
+    private string DetailsHref => $"/personal/alunos/{PersonalStudentId}";
     private string? _inviteUrl;
     private string? _whatsAppUrl;
 

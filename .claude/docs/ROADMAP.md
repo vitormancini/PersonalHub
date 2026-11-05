@@ -16,17 +16,16 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
 - [x] Roles Personal e Student.
 - [x] Provisionamento manual de personal.
 - [x] Fluxo seguro de criação/convite de aluno (2026-11-04).
-- [ ] Autorização e isolamento de dados.
+- [x] Autorização e isolamento de dados (2026-11-04).
   Critério: usuários autenticados acessam apenas funcionalidades e dados do próprio perfil/vínculo.
-  Em revisão (2026-11-04): autorização por padrão (FallbackPolicy), policy `ActivePersonal` checada no banco a cada requisição e link do convite a partir de `App:PublicBaseUrl`.
 
 ## Fase 2 — Alunos
-- [ ] Listar alunos.
-- [ ] Cadastrar aluno. Entregue em parte na Fase 1 (cadastro + convite); faltam reenvio/revogação do convite e a ligação com a lista e os detalhes.
-- [ ] Consultar detalhes.
-- [ ] Editar dados permitidos.
-- [ ] Ativar/inativar vínculo.
-- [ ] Definir valor e vencimento conforme regras aprovadas.
+- [x] Listar alunos (2026-11-05): busca por nome e filtros por situação.
+- [x] Cadastrar aluno (2026-11-05): cadastro da Fase 1 + reenvio e cancelamento do convite (D-034).
+- [x] Consultar detalhes (2026-11-05).
+- [x] Editar dados permitidos (2026-11-05): e-mail só antes do aceite (D-035).
+- [x] Ativar/inativar vínculo (2026-11-05): D-037.
+- [x] Definir valor e vencimento conforme regras aprovadas (2026-11-05): D-036.
   Critério: personal gerencia somente alunos associados a ele.
 
 ## Fase 3 — Aulas

@@ -1,12 +1,153 @@
 @page "/personal/alunos"
 @attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
 @layout PersonalLayout
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Domain.Students
+@inject ListStudentsQuery Query
 
-@* A lista de alunos chega na Fase 2; por enquanto, só o acesso ao cadastro. *@
+@* SSR estático: busca e filtro vão na query string (GET), então a lista funciona sem JavaScript e o link pode ser
+   compartilhado ou recarregado. Só aparecem os alunos do personal logado. *@
 
-<PersonalPageHeader Title="Alunos" />
+<PersonalPageHeader Title="Alunos" ActionHref="/personal/alunos/novo" ActionLabel="Novo aluno" />
 
-<div class="ph-card">
-    <p>A lista dos seus alunos vai aparecer aqui. Por enquanto, você já pode cadastrar alunos e enviar o convite.</p>
-    <a href="/personal/alunos/novo" class="ph-btn ph-btn-primary ph-btn-block">Novo aluno</a>
-</div>
+@if (_view is null)
+{
+    return;
+}
+
+@if (!_view.HasAnyStudent)
+{
+    <div class="ph-empty">
+        <div class="ph-status-icon ph-status-info" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6M22 11h-6" /></svg>
+        </div>
+        <h2 class="ph-result-title">Nenhum aluno ainda</h2>
+        <p class="ph-result-text">Cadastre seu primeiro aluno e envie o convite pelo WhatsApp.</p>
+        <a href="/personal/alunos/novo" class="ph-btn ph-btn-primary ph-btn-block">Cadastrar aluno</a>
+    </div>
+    return;
+}
+
+@* Enter no campo envia o formulário (envio implícito), sem botão invisível que roubaria o foco. *@
+<form method="get" action="/personal/alunos" class="ph-search" role="search">
+    <input type="hidden" name="situacao" value="@FilterValue(_filter)" />
+    <label for="busca-aluno" class="visually-hidden">Buscar aluno</label>
+    <svg class="ph-search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+    <input id="busca-aluno" type="search" name="q" value="@_search" class="ph-input" placeholder="Buscar por nome"
+           autocomplete="off" maxlength="@ListStudentsQuery.SearchMaxLength" enterkeyhint="search" />
+</form>
+
+<nav class="ph-filters" aria-label="Filtrar por situação">
+    @foreach (var filter in Enum.GetValues<StudentFilter>())
+    {
+        var active = filter == _filter;
+        <a href="@Href(filter, _search)" class="ph-filter @(active ? "is-active" : null)" aria-current="@(active ? "page" : null)">
+            @FilterLabel(filter) <span class="ph-filter-count">@_view.Counts[filter]</span>
+        </a>
+    }
+</nav>
+
+@if (_view.Items.Count == 0)
+{
+    <p class="ph-card ph-list-empty" role="status">
+        @if (_search.Length > 0)
+        {
+            @:Nenhum aluno encontrado para "@_search".
+        }
+        else
+        {
+            @EmptyFilterText(_filter)
+        }
+    </p>
+}
+else
+{
+    <ul class="ph-list" aria-label="@($"{FilterLabel(_filter)}: {_view.Items.Count} aluno(s)")">
+        @foreach (var item in _view.Items)
+        {
+            <li>
+                <a href="/personal/alunos/@item.Id" class="ph-list-item">
+                    <span class="ph-avatar" aria-hidden="true">@StudentDisplay.Initials(item.Name)</span>
+                    <span class="ph-list-text">
+                        <span class="ph-list-title">@item.Name</span>
+                        <span class="ph-list-subtitle">@Subtitle(item)</span>
+                    </span>
+                    <span class="ph-pill @StudentDisplay.StatusPillClass(item.Status)">@StudentDisplay.StatusLabel(item.Status)</span>
+                    <svg class="ph-list-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+                </a>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "situacao")]
+    private string? Situacao { get; set; }
+
+    [SupplyParameterFromQuery(Name = "q")]
+    private string? Q { get; set; }
+
+    private StudentListView? _view;
+    private StudentFilter _filter;
+    private string _search = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Abre em "Ativos"; valor desconhecido também cai no padrão.
+        _filter = Situacao?.Trim().ToLowerInvariant() switch
+        {
+            "convidados" => StudentFilter.Convidados,
+            "inativos" => StudentFilter.Inativos,
+            "todos" => StudentFilter.Todos,
+            _ => StudentFilter.Ativos
+        };
+        _search = (Q ?? string.Empty).Trim();
+        if (_search.Length > ListStudentsQuery.SearchMaxLength)
+        {
+            _search = _search[..ListStudentsQuery.SearchMaxLength];
+        }
+
+        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        _view = await Query.GetAsync(userId, _filter, _search, HttpContext.RequestAborted);
+    }
+
+    private static string FilterValue(StudentFilter filter) => filter.ToString().ToLowerInvariant();
+
+    private static string Href(StudentFilter filter, string search) =>
+        search.Length == 0
+            ? $"/personal/alunos?situacao={FilterValue(filter)}"
+            : $"/personal/alunos?situacao={FilterValue(filter)}&q={Uri.EscapeDataString(search)}";
+
+    private static string FilterLabel(StudentFilter filter) => filter switch
+    {
+        StudentFilter.Ativos => "Ativos",
+        StudentFilter.Convidados => "Convidados",
+        StudentFilter.Inativos => "Inativos",
+        _ => "Todos"
+    };
+
+    private static string EmptyFilterText(StudentFilter filter) => filter switch
+    {
+        StudentFilter.Ativos => "Nenhum aluno ativo. Alunos aparecem aqui depois de aceitar o convite.",
+        StudentFilter.Convidados => "Nenhum convite aguardando aceite.",
+        StudentFilter.Inativos => "Nenhum vínculo inativo.",
+        _ => "Nenhum aluno."
+    };
+
+    private static string Subtitle(StudentListItem item) => item.Status switch
+    {
+        PersonalStudentStatus.Active =>
+            $"{StudentDisplay.Money(item.LessonPrice)} por aula · vence dia {item.BillingDueDay}",
+        PersonalStudentStatus.Inactive =>
+            item.EndedAtUtc is { } ended ? $"Inativo desde {StudentDisplay.Date(ended)}" : "Inativo",
+        _ => item.Invite switch
+        {
+            InviteStatus.Pending => $"Convite expira em {StudentDisplay.DayMonth(item.InviteExpiresAtUtc!.Value)}",
+            InviteStatus.Expired => "Convite expirado",
+            _ => "Convite cancelado"
+        }
+    };
+}

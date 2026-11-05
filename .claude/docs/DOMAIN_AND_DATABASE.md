@@ -278,6 +278,8 @@ O personal nasce por um script de linha de comando que cria o usuário, a role `
 
 O aluno é cadastrado pelo personal como vínculo `Invited` e recebe um convite (D-016). Ao aceitar, ganha a role `Student` e o `StudentUserId` do vínculo é preenchido. Se o e-mail do convite já tiver conta (aluno de outro personal), o aceite pede login em vez de nova senha e só liga o vínculo.
 
+Na gestão de alunos (Fase 2), o personal pode gerar um novo convite (revoga os anteriores na hora) ou cancelar o convite em aberto (D-034); trocar o e-mail só enquanto `Invited` (D-035). Inativar preenche `EndedAtUtc` e revoga o convite em aberto; reativar volta para `Active` se há `StudentUserId`, senão para `Invited` com um novo convite (D-037). Essas ações carregam o vínculo com `SELECT ... FOR UPDATE` numa transação, para não se cruzarem entre si nem com o aceite do convite.
+
 ## 7. Consultas principais
 
 Toda consulta parte do vínculo filtrado pelo usuário logado. No código viram LINQ projetado para DTO.

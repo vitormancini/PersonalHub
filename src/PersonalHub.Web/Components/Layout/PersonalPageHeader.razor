@@ -1,4 +1,5 @@
-@* Preenche o cabeçalho do PersonalLayout: título (também usado no <title>) e, opcionalmente, o botão voltar. *@
+@* Preenche o cabeçalho do PersonalLayout: título (também usado no <title>) e, opcionalmente, o botão voltar
+   e um link de ação à direita (por exemplo, "Editar"). *@
 
 <PageTitle>@Title · PersonalHub</PageTitle>
 
@@ -13,9 +14,17 @@
     </SectionContent>
 }
 
+@if (ActionHref is not null)
+{
+    <SectionContent SectionName="@ActionSection">
+        <a href="@ActionHref" class="ph-btn ph-btn-on-dark ph-btn-sm">@ActionLabel</a>
+    </SectionContent>
+}
+
 @code {
     public const string TitleSection = "ph-shell-title";
     public const string BackSection = "ph-shell-back";
+    public const string ActionSection = "ph-shell-action";
 
     [Parameter, EditorRequired]
     public string Title { get; set; } = default!;
@@ -25,4 +34,10 @@
 
     [Parameter]
     public string BackLabel { get; set; } = "Voltar";
+
+    [Parameter]
+    public string? ActionHref { get; set; }
+
+    [Parameter]
+    public string? ActionLabel { get; set; }
 }

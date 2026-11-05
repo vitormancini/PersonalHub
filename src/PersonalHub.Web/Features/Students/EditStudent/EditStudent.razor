@@ -1,0 +1,204 @@
+@page "/personal/alunos/{PersonalStudentId:guid}/editar"
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
+@layout PersonalLayout
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Students.CreateStudent
+@inject EditStudentQuery Query
+@inject EditStudentHandler Handler
+@inject CreatedInviteHandoff Handoff
+@inject NavigationManager Navigation
+
+@* SSR estático com antiforgery, como o cadastro. Toda validação acontece no EditStudentHandler; o campo oculto
+   Version leva o xmin lido ao abrir a tela para detectar alterações salvas nesse meio-tempo. *@
+
+<PersonalPageHeader Title="Editar aluno" BackHref="@DetailsHref" BackLabel="Voltar para o aluno" />
+
+@if (_view is null)
+{
+    return;
+}
+
+<EditForm EditContext="_editContext" FormName="editar-aluno" OnSubmit="SubmitAsync" novalidate class="ph-form" data-ph-busy-form>
+    <input type="hidden" name="Input.Version" value="@Input.Version" />
+
+    @if (_outcome == EditStudentOutcome.Conflict)
+    {
+        <div class="ph-alert ph-alert-warning" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>Outra alteração foi salva antes. Recarregamos os dados atuais. Confira e salve de novo.</p>
+        </div>
+    }
+    else if (_outcome == EditStudentOutcome.DuplicateEmail)
+    {
+        <div class="ph-alert ph-alert-danger" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>Você já tem um aluno com este e-mail. Abra o cadastro dele para reenviar o convite.</p>
+        </div>
+    }
+
+    <section class="ph-section-card" aria-labelledby="dados-aluno">
+        <h2 id="dados-aluno" class="ph-section-title">Dados do aluno</h2>
+
+        <div class="ph-field">
+            <label for="aluno-nome" class="ph-label">Nome completo</label>
+            <InputText id="aluno-nome" @bind-Value="Input.Name" class="ph-input" autocomplete="off"
+                       autocapitalize="words" maxlength="150" aria-describedby="aluno-nome-error" />
+            <ValidationMessage For="() => Input.Name" id="aluno-nome-error" class="ph-field-error" />
+        </div>
+
+        <div class="ph-field">
+            <label for="aluno-email" class="ph-label">E-mail</label>
+            @if (_view.CanEditEmail)
+            {
+                <InputText id="aluno-email" type="email" @bind-Value="Input.Email" class="ph-input" autocomplete="off"
+                           inputmode="email" autocapitalize="none" spellcheck="false" maxlength="256"
+                           aria-describedby="aluno-email-hint aluno-email-error" />
+                <span id="aluno-email-hint" class="ph-field-hint">Se mudar o e-mail, o convite atual é cancelado e você envia um novo link.</span>
+                <ValidationMessage For="() => Input.Email" id="aluno-email-error" class="ph-field-error" />
+            }
+            else
+            {
+                @* Sem name: o valor não é enviado. O servidor ignora o e-mail de qualquer forma (D-035). *@
+                <input id="aluno-email" type="email" value="@Input.Email" class="ph-input" readonly
+                       aria-describedby="aluno-email-hint" />
+                <span id="aluno-email-hint" class="ph-field-hint">É o login do aluno e só ele pode trocar.</span>
+            }
+        </div>
+
+        <div class="ph-field">
+            <label for="aluno-celular" class="ph-label">Celular com WhatsApp</label>
+            <InputText id="aluno-celular" type="tel" @bind-Value="Input.Phone" class="ph-input" autocomplete="off"
+                       inputmode="tel" maxlength="25" placeholder="(11) 99999-8888" aria-describedby="aluno-celular-error" />
+            <ValidationMessage For="() => Input.Phone" id="aluno-celular-error" class="ph-field-error" />
+        </div>
+    </section>
+
+    <section class="ph-section-card" aria-labelledby="cobranca">
+        <h2 id="cobranca" class="ph-section-title">Cobrança</h2>
+
+        <div class="ph-grid-2">
+            <div class="ph-field">
+                <label for="aluno-valor" class="ph-label">Valor da aula</label>
+                <div class="ph-input-prefix">
+                    <span aria-hidden="true">R$</span>
+                    <InputText id="aluno-valor" @bind-Value="Input.LessonPrice" class="ph-input" autocomplete="off"
+                               inputmode="decimal" maxlength="12" placeholder="80,00" aria-describedby="aluno-valor-error" />
+                </div>
+                <ValidationMessage For="() => Input.LessonPrice" id="aluno-valor-error" class="ph-field-error" />
+            </div>
+
+            <div class="ph-field">
+                <label for="aluno-vencimento" class="ph-label">Dia do vencimento</label>
+                <InputSelect id="aluno-vencimento" @bind-Value="Input.BillingDueDay" class="ph-input ph-select"
+                             aria-describedby="aluno-vencimento-error">
+                    <option value="">Dia</option>
+                    @for (var day = 1; day <= 31; day++)
+                    {
+                        <option value="@day">@day</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => Input.BillingDueDay" id="aluno-vencimento-error" class="ph-field-error" />
+            </div>
+        </div>
+
+        <div class="ph-alert ph-alert-info">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+            <p>
+                O novo valor vale para as aulas registradas a partir de agora. Aulas já registradas mantêm o valor
+                anterior. O novo vencimento vale a partir do próximo demonstrativo.
+            </p>
+        </div>
+    </section>
+
+    <div class="ph-stack-tight">
+        <button type="submit" class="ph-btn ph-btn-primary ph-btn-block" data-ph-busy-text="Salvando…">
+            <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span class="ph-btn-text">Salvar alterações</span>
+        </button>
+        <a href="@DetailsHref" class="ph-btn ph-btn-outline ph-btn-block">Cancelar</a>
+    </div>
+</EditForm>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public Guid PersonalStudentId { get; set; }
+
+    [SupplyParameterFromForm(FormName = "editar-aluno")]
+    private EditStudentInput Input { get; set; } = default!;
+
+    private EditStudentView? _view;
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _messages = default!;
+    private EditStudentOutcome? _outcome;
+
+    private string DetailsHref => $"/personal/alunos/{PersonalStudentId}";
+
+    private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _view = await Query.GetAsync(UserId, PersonalStudentId, HttpContext.RequestAborted);
+        if (_view is null)
+        {
+            // Vínculo de outro personal ou inexistente: mesma resposta, sem revelar qual dos dois.
+            Navigation.NotFound();
+            return;
+        }
+
+        // GET: dados atuais. POST: o que o personal enviou (o e-mail travado volta a ser o gravado).
+        Input ??= _view.Input;
+        if (!_view.CanEditEmail)
+        {
+            Input.Email = _view.Input.Email;
+        }
+
+        _editContext = new EditContext(Input);
+        _messages = new ValidationMessageStore(_editContext);
+    }
+
+    private async Task SubmitAsync()
+    {
+        var result = await Handler.HandleAsync(
+            new EditStudentCommand(UserId, PersonalStudentId, Input, HttpContext.TraceIdentifier), HttpContext.RequestAborted);
+
+        switch (result.Outcome)
+        {
+            case EditStudentOutcome.Succeeded when result.NewInviteToken is not null:
+                // E-mail trocado: o convite antigo foi revogado e o novo link segue para a tela de envio.
+                Handoff.Store(HttpContext, UserId, PersonalStudentId, result.NewInviteToken);
+                Navigation.NavigateTo($"/personal/alunos/{PersonalStudentId}/convite-criado");
+                return;
+            case EditStudentOutcome.Succeeded:
+                Navigation.NavigateTo($"{DetailsHref}?aviso=salvo");
+                return;
+            case EditStudentOutcome.NotFound:
+                _view = null;
+                Navigation.NotFound();
+                return;
+            case EditStudentOutcome.Conflict:
+                await ReloadAsync();
+                break;
+        }
+
+        _outcome = result.Outcome;
+        ServerValidation.Show(_editContext, _messages, result.Errors);
+    }
+
+    /// <summary>Conflito: troca o formulário pelos dados atuais (e pela versão nova), como pede a mensagem.</summary>
+    private async Task ReloadAsync()
+    {
+        _view = await Query.GetAsync(UserId, PersonalStudentId, HttpContext.RequestAborted);
+        if (_view is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        Input = _view.Input;
+        _editContext = new EditContext(Input);
+        _messages = new ValidationMessageStore(_editContext);
+    }
+}
