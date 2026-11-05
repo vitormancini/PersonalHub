@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using PersonalHub.Web.Components;
 using PersonalHub.Web.Features.Authentication.Login;
 using PersonalHub.Web.Features.Authentication.Logout;
 using PersonalHub.Web.Features.Authentication.ProvisionPersonal;
 using PersonalHub.Web.Features.Students;
+using PersonalHub.Web.Infrastructure.Hosting;
 using PersonalHub.Web.Infrastructure.Identity;
 using PersonalHub.Web.Infrastructure.Observability;
 using PersonalHub.Web.Infrastructure.Persistence;
@@ -16,6 +18,7 @@ if (ProvisionPersonalCommand.IsInvoked(args))
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddObservability();
+builder.AddPublicUrls();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -46,13 +49,23 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
+// Toda rota exige login por padrão (FallbackPolicy). As públicas são marcadas com AllowAnonymous.
 // O writer padrão responde só o status (Healthy/Degraded/Unhealthy), sem detalhes de exceção.
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health").AllowAnonymous();
 
-app.MapStaticAssets();
+app.MapStaticAssets().AllowAnonymous();
 app.MapLogout();
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    .Add(endpoint =>
+    {
+        // Endpoint do framework que só repassa um redirecionamento protegido durante a navegação aprimorada.
+        // Os demais endpoints do Blazor (/_blazor) continuam exigindo login: não há página interativa pública.
+        if (endpoint is RouteEndpointBuilder { RoutePattern.RawText: "/_framework/opaque-redirect" })
+        {
+            endpoint.Metadata.Add(new AllowAnonymousAttribute());
+        }
+    });
 
 app.Run();
 return 0;

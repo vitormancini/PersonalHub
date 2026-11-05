@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using PersonalHub.Web.Features.Authentication;
+using PersonalHub.Web.Features.Authentication.ActivePersonal;
 using PersonalHub.Web.Infrastructure.Persistence;
 
 namespace PersonalHub.Web.Infrastructure.Identity;
@@ -71,7 +73,14 @@ public static partial class IdentityServiceCollectionExtensions
             options.Events.OnRedirectToAccessDenied = RedirectToOwnHomeAsync;
         });
 
-        services.AddAuthorization();
+        services.AddAuthorizationBuilder()
+            // Autorização por padrão: endpoint sem atributo exige login. Páginas públicas usam [AllowAnonymous].
+            .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
+            .AddPolicy(AppPolicies.ActivePersonal, policy => policy
+                .RequireRole(AppRoles.Personal)
+                .AddRequirements(new ActivePersonalRequirement()));
+        services.AddScoped<IAuthorizationHandler, ActivePersonalHandler>();
+        services.AddSingleton<IAuthorizationMiddlewareResultHandler, InactivePersonalResultHandler>();
         services.AddCascadingAuthenticationState();
 
         return services;

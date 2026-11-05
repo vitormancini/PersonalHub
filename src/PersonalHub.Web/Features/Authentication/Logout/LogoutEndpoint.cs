@@ -34,7 +34,9 @@ public static partial class LogoutEndpoint
                 }
 
                 return Results.LocalRedirect("/entrar");
-            });
+            })
+            // Sair com a sessão já expirada só leva de volta para /entrar; o antiforgery continua exigido.
+            .AllowAnonymous();
 
         return endpoints;
     }

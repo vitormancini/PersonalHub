@@ -42,7 +42,8 @@ public class HealthCheckTests(DatabaseFixture fixture)
             builder.ConfigureAppConfiguration((_, configuration) =>
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:PersonalHub"] = connectionString
+                    ["ConnectionStrings:PersonalHub"] = connectionString,
+                    [TestApp.PublicBaseUrlKey] = TestApp.PublicBaseUrl
                 }));
         });
 }

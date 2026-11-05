@@ -18,6 +18,7 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
 - [x] Fluxo seguro de criação/convite de aluno (2026-11-04).
 - [ ] Autorização e isolamento de dados.
   Critério: usuários autenticados acessam apenas funcionalidades e dados do próprio perfil/vínculo.
+  Em revisão (2026-11-04): autorização por padrão (FallbackPolicy), policy `ActivePersonal` checada no banco a cada requisição e link do convite a partir de `App:PublicBaseUrl`.
 
 ## Fase 2 — Alunos
 - [ ] Listar alunos.
