@@ -39,6 +39,10 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 | D-031 | Envio do convite | Pelo WhatsApp do próprio personal (link wa.me com mensagem pronta) até a Fase 6 |
 | D-032 | Nome do aluno na conta | Coluna `FullName` em `AspNetUsers`, preenchida pelo aluno no aceite |
 | D-033 | Aceite do convite | Na Fase 6, exige código de uso único enviado por WhatsApp ao celular do aluno; risco aceito no MVP |
+| D-034 | Reenvio do convite | Gera novo link e revoga o anterior na hora; há também "Cancelar convite" sem gerar outro |
+| D-035 | E-mail do aluno | Editável só enquanto `Invited` (trocar revoga o convite); depois do aceite é o login e fica somente leitura |
+| D-036 | Alteração de valor e vencimento | Valor novo vale para aulas registradas a partir da alteração; vencimento novo, a partir do próximo demonstrativo |
+| D-037 | Inativar e reativar vínculo | Inativar mantém histórico e revoga convite; reativar volta para `Active` (com conta) ou `Invited` (novo link) |
 
 ## Pendências que exigem decisão
 
@@ -218,6 +222,42 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 - Decisão: na Fase 6, o aceite do convite passa a exigir um código de uso único enviado por WhatsApp ao celular do aluno. O personal não vê esse código. Até lá, o risco fica aceito no MVP.
 - Alternativas consideradas: manter o aceite só com o link; verificar por e-mail.
 - Consequências: item adicionado à Fase 6 do roadmap e nota de risco aceito em `SECURITY.md` (seção 8). Até a Fase 6, a aprovação de aulas não prova que foi o aluno quem aprovou.
+- Aprovado por: Vítor Mancini
+
+### D-034 — Reenvio e cancelamento do convite
+- Data: 2026-11-05
+- Estado: Aprovada
+- Contexto: design da Fase 2 (gestão de alunos). D-031 deixou o reenvio para a Fase 2. Só o hash do token é gravado (D-016), então o link original não pode ser mostrado de novo.
+- Decisão: "Gerar novo link e enviar" cria um convite novo de 7 dias e revoga na hora todos os convites em aberto do vínculo. O link aparece uma única vez, na mesma tela "Convite do aluno" do cadastro. "Cancelar convite" só revoga, sem gerar outro.
+- Alternativas consideradas: guardar o token para reexibir o mesmo link; manter vários links válidos ao mesmo tempo.
+- Consequências: no máximo um convite válido por vínculo; um link vazado deixa de valer assim que o personal gera outro ou cancela. Ações auditadas como `StudentInviteRenewed` e `StudentInviteCancelled`.
+- Aprovado por: Vítor Mancini
+
+### D-035 — E-mail do aluno editável só antes do aceite
+- Data: 2026-11-05
+- Estado: Aprovada
+- Contexto: o e-mail do vínculo vira o login do aluno quando ele aceita o convite.
+- Decisão: o personal edita o e-mail só enquanto o vínculo está `Invited`; trocar o e-mail revoga o convite em aberto e gera um novo link na mesma transação. Depois do aceite (`Active` ou `Inactive`), o e-mail fica somente leitura para o personal: é o login e só o aluno pode trocar. O servidor ignora o e-mail enviado nesses casos.
+- Alternativas consideradas: permitir troca a qualquer momento; bloquear a troca também antes do aceite.
+- Consequências: o personal corrige um e-mail digitado errado sem recadastrar o aluno; a troca de login pelo próprio aluno fica para a área do aluno.
+- Aprovado por: Vítor Mancini
+
+### D-036 — Vigência de novo valor da aula e novo vencimento
+- Data: 2026-11-05
+- Estado: Aprovada
+- Contexto: edição dos dados de cobrança do vínculo.
+- Decisão: o novo valor da aula vale só para aulas registradas a partir da alteração (o preço já é congelado por aula, D-018). O novo dia de vencimento vale a partir do próximo demonstrativo.
+- Alternativas consideradas: recalcular aulas pendentes; agendar a alteração para o mês seguinte.
+- Consequências: nenhum valor histórico muda. A auditoria `StudentUpdated` guarda os campos alterados e os valores anterior/novo de preço e vencimento (sem nome, e-mail ou celular).
+- Aprovado por: Vítor Mancini
+
+### D-037 — Inativar e reativar o vínculo
+- Data: 2026-11-05
+- Estado: Aprovada
+- Contexto: D-028 definiu o encerramento; faltava a reativação.
+- Decisão: inativar mantém todo o histórico, impede novas aulas, revoga o convite em aberto e preenche `EndedAtUtc`. Reativar volta para `Active` se `StudentUserId` existe; senão volta para `Invited` com um novo link de convite gerado na hora. `EndedAtUtc` volta a ser nulo. A reativação é bloqueada se o personal tiver outro vínculo não inativo com o mesmo e-mail (o índice único existente também garante).
+- Alternativas consideradas: reativar sempre como `Invited`; criar um vínculo novo em vez de reativar.
+- Consequências: o personal retoma um aluno sem perder o histórico; o bloqueio por e-mail evita dois vínculos ativos para a mesma pessoa. Ações auditadas como `StudentLinkInactivated` e `StudentLinkReactivated`.
 - Aprovado por: Vítor Mancini
 
 ## Modelo para novas decisões
