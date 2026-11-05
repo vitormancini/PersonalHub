@@ -38,6 +38,7 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 | D-030 | Recuperação de senha | Via WhatsApp na Fase 6; sem link no login até lá |
 | D-031 | Envio do convite | Pelo WhatsApp do próprio personal (link wa.me com mensagem pronta) até a Fase 6 |
 | D-032 | Nome do aluno na conta | Coluna `FullName` em `AspNetUsers`, preenchida pelo aluno no aceite |
+| D-033 | Aceite do convite | Na Fase 6, exige código de uso único enviado por WhatsApp ao celular do aluno; risco aceito no MVP |
 
 ## Pendências que exigem decisão
 
@@ -208,6 +209,15 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 - Decisão: nova coluna `FullName varchar(150) null` em `AspNetUsers` (migration `AddUserFullName`), preenchida pelo aluno ao criar a conta. Nula para personais (nome em `PersonalProfile`).
 - Alternativas consideradas: atualizar `PersonalStudent.StudentName` (quebraria D-015); descartar o nome digitado.
 - Consequências: cada personal continua vendo o nome que cadastrou; o nome da conta servirá à área do aluno.
+- Aprovado por: Vítor Mancini
+
+### D-033 — Verificação de posse do celular no aceite do convite
+- Data: 2026-11-05
+- Estado: Aprovada
+- Contexto: hoje o personal tem o link do convite (D-031) e poderia aceitá-lo ele mesmo, criando a conta do aluno e aprovando aulas em nome dele na Fase 3.
+- Decisão: na Fase 6, o aceite do convite passa a exigir um código de uso único enviado por WhatsApp ao celular do aluno. O personal não vê esse código. Até lá, o risco fica aceito no MVP.
+- Alternativas consideradas: manter o aceite só com o link; verificar por e-mail.
+- Consequências: item adicionado à Fase 6 do roadmap e nota de risco aceito em `SECURITY.md` (seção 8). Até a Fase 6, a aprovação de aulas não prova que foi o aluno quem aprovou.
 - Aprovado por: Vítor Mancini
 
 ## Modelo para novas decisões

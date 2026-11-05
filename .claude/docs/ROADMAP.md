@@ -62,6 +62,7 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
 - [ ] Notificar aluno no vencimento com demonstrativo.
 - [ ] Notificar personal quando aluno informar pagamento.
 - [ ] Implementar webhooks/links seguros se necessários.
+- [ ] Exigir código de uso único, enviado por WhatsApp ao celular do aluno, no aceite do convite (D-033).
   Critério: falhas, retries, duplicidade e auditoria testados.
 
 ## Fase 7 — Dashboard e acabamento

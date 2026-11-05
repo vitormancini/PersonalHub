@@ -85,6 +85,7 @@ Não assumir que CPF precisa ser coletado apenas porque foi citado como exemplo.
 - Usar confirmação explícita por POST/ação do usuário.
 - Validar assinatura/autenticidade dos webhooks e proteger contra replay.
 - Rate limit e registrar tentativas suspeitas.
+- Risco aceito no MVP (D-033): o personal tem o link do convite e pode aceitá-lo no lugar do aluno. Na Fase 6, o aceite passa a exigir código de uso único enviado por WhatsApp ao celular do aluno, sem que o personal o veja.
 
 ## 9. Auditoria
 
