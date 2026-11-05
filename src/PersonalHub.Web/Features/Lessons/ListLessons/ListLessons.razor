@@ -1,0 +1,244 @@
+@page "/personal/aulas"
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
+@layout PersonalLayout
+@using System.Globalization
+@using PersonalHub.Web.Domain
+@using PersonalHub.Web.Domain.Lessons
+@using PersonalHub.Web.Features.Authentication
+@inject ListLessonsQuery Query
+@inject TimeProvider Clock
+
+@* SSR estático: mês, situação e aluno vão na query string (?mes=2026-11&situacao=&aluno=), então a lista funciona
+   sem JavaScript e o link pode ser recarregado. Só aparecem aulas dos vínculos do personal logado. *@
+
+<PersonalPageHeader Title="Aulas" ActionHref="@RegisterHref" ActionLabel="Registrar aula" />
+
+@if (_view is null)
+{
+    return;
+}
+
+<div class="ph-detail">
+    @if (Notice is not null)
+    {
+        <div class="ph-alert ph-alert-success" role="status">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="m8 12 3 3 5-6" /></svg>
+            <p>@Notice</p>
+        </div>
+    }
+
+    <nav class="ph-month-nav" aria-label="Mês">
+        <a href="@Href(month: _month.AddMonths(-1))" class="ph-month-arrow" aria-label="Mês anterior: @LessonDisplay.Month(_month.AddMonths(-1))">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6" /></svg>
+        </a>
+        <h2 class="ph-month-label" aria-live="polite">@LessonDisplay.Month(_month)</h2>
+        @if (_month < _currentMonth)
+        {
+            <a href="@Href(month: _month.AddMonths(1))" class="ph-month-arrow" aria-label="Próximo mês: @LessonDisplay.Month(_month.AddMonths(1))">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+            </a>
+        }
+        else
+        {
+            <span class="ph-month-arrow is-disabled" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+            </span>
+        }
+    </nav>
+
+    @* Clicar no contador filtra; clicar de novo no ativo limpa o filtro. *@
+    <nav class="ph-counters" aria-label="Filtrar por situação">
+        @foreach (var status in CounterOrder)
+        {
+            var active = _status == status;
+            <a href="@Href(status: active ? null : status, clearStatus: active)"
+               class="ph-counter ph-counter-@StatusSlug(status) @(active ? "is-active" : null)" aria-current="@(active ? "true" : null)">
+                <span class="ph-counter-value">@_view.Counts.Of(status)</span>
+                <span class="ph-counter-label">@CounterLabel(status)</span>
+            </a>
+        }
+    </nav>
+
+    @if (_view.Students.Count > 0)
+    {
+        <form method="get" action="/personal/aulas" class="ph-field ph-filter-student">
+            <input type="hidden" name="mes" value="@MonthValue(_month)" />
+            @if (_status is not null)
+            {
+                <input type="hidden" name="situacao" value="@StatusSlug(_status.Value)" />
+            }
+            @if (_includeDeleted)
+            {
+                <input type="hidden" name="excluidas" value="1" />
+            }
+            <label for="filtro-aluno" class="ph-label">Aluno</label>
+            <div class="ph-inline">
+                <select id="filtro-aluno" name="aluno" class="ph-input ph-select">
+                    <option value="" selected="@(_studentId is null)">Todos os alunos</option>
+                    @foreach (var student in _view.Students)
+                    {
+                        <option value="@student.Id" selected="@(_studentId == student.Id)">
+                            @student.Name@(student.Inactive ? " (inativo)" : null)
+                        </option>
+                    }
+                </select>
+                <button type="submit" class="ph-btn ph-btn-outline">Filtrar</button>
+            </div>
+        </form>
+    }
+
+    @if (_view.Items.Count == 0)
+    {
+        @if (_status is null && _studentId is null)
+        {
+            <div class="ph-empty">
+                <div class="ph-status-icon ph-status-info" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+                </div>
+                <h2 class="ph-result-title">Nenhuma aula neste mês</h2>
+                <p class="ph-result-text">Registre a aula logo depois de dar. O aluno recebe para confirmar.</p>
+                <a href="@RegisterHref" class="ph-btn ph-btn-primary ph-btn-block">Registrar aula</a>
+            </div>
+        }
+        else
+        {
+            <p class="ph-card ph-list-empty" role="status">Nenhuma aula com esses filtros neste mês.</p>
+        }
+    }
+    else
+    {
+        @foreach (var day in _view.Items.GroupBy(i => SaoPaulo.ToLocalDate(i.OccurredAtUtc)))
+        {
+            var headingId = $"dia-{day.Key:yyyyMMdd}";
+            <section class="ph-day" aria-labelledby="@headingId">
+                <h3 id="@headingId" class="ph-day-title">@LessonDisplay.DayHeading(day.Key, _today)</h3>
+                <ul class="ph-list">
+                    @foreach (var item in day)
+                    {
+                        <li>
+                            <a href="/personal/aulas/@item.Id" class="ph-list-item ph-lesson-item">
+                                <span class="ph-lesson-time">@LessonDisplay.Time(item.OccurredAtUtc)</span>
+                                <span class="ph-list-text">
+                                    <span class="ph-list-title">@item.StudentName</span>
+                                    <span class="ph-list-subtitle">@LessonDisplay.Summary(item.DurationMinutes, item.UnitPrice)</span>
+                                </span>
+                                <span class="ph-pill @LessonDisplay.StatusPillClass(item.Status, item.Deleted)">@LessonDisplay.StatusLabel(item.Status, item.Deleted)</span>
+                                <svg class="ph-list-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    }
+
+    @if (_view.Counts.Deleted > 0)
+    {
+        <a href="@Href(includeDeleted: !_includeDeleted)" class="ph-link-center">
+            @(_includeDeleted ? "Ocultar excluídas" : $"Mostrar excluídas ({_view.Counts.Deleted})")
+        </a>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "mes")]
+    private string? Mes { get; set; }
+
+    [SupplyParameterFromQuery(Name = "situacao")]
+    private string? Situacao { get; set; }
+
+    [SupplyParameterFromQuery(Name = "aluno")]
+    private Guid? Aluno { get; set; }
+
+    [SupplyParameterFromQuery(Name = "excluidas")]
+    private string? Excluidas { get; set; }
+
+    [SupplyParameterFromQuery(Name = "aviso")]
+    private string? Aviso { get; set; }
+
+    private static readonly LessonStatus[] CounterOrder = [LessonStatus.Pending, LessonStatus.Approved, LessonStatus.Rejected];
+
+    private LessonListView? _view;
+    private DateOnly _today;
+    private DateOnly _currentMonth;
+    private DateOnly _month;
+    private LessonStatus? _status;
+    private Guid? _studentId;
+    private bool _includeDeleted;
+
+    /// <summary>Mensagem de sucesso depois de um redirecionamento (PRG). Só textos fixos: nada vem da URL para a tela.</summary>
+    private string? Notice => Aviso switch
+    {
+        "registrada" => "Aula registrada. O aluno recebe para confirmar.",
+        "excluida" => "Aula excluída.",
+        _ => null
+    };
+
+    private string RegisterHref => _studentId is null ? "/personal/aulas/nova" : $"/personal/aulas/nova?aluno={_studentId}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _today = SaoPaulo.ToLocalDate(Clock.GetUtcNow().UtcDateTime);
+        _currentMonth = new DateOnly(_today.Year, _today.Month, 1);
+
+        // Mês inválido ou no futuro cai no mês atual: não existe aula no futuro (D-039).
+        _month = DateOnly.TryParseExact(Mes, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out var month)
+                 && month.Year >= 2000 && month <= _currentMonth
+            ? month
+            : _currentMonth;
+        _status = Situacao?.Trim().ToLowerInvariant() switch
+        {
+            "aguardando" => LessonStatus.Pending,
+            "confirmadas" => LessonStatus.Approved,
+            "recusadas" => LessonStatus.Rejected,
+            _ => null
+        };
+        _studentId = Aluno;
+        _includeDeleted = Excluidas == "1";
+
+        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        _view = await Query.GetAsync(userId, _month, _status, _studentId, _includeDeleted, HttpContext.RequestAborted);
+    }
+
+    private static string MonthValue(DateOnly month) => month.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+
+    private static string StatusSlug(LessonStatus status) => status switch
+    {
+        LessonStatus.Approved => "confirmadas",
+        LessonStatus.Rejected => "recusadas",
+        _ => "aguardando"
+    };
+
+    private static string CounterLabel(LessonStatus status) => status switch
+    {
+        LessonStatus.Approved => "Confirmadas",
+        LessonStatus.Rejected => "Recusadas",
+        _ => "Aguardando"
+    };
+
+    /// <summary>Monta o link mantendo os filtros atuais, trocando só o que foi pedido.</summary>
+    private string Href(DateOnly? month = null, LessonStatus? status = null, bool clearStatus = false, bool? includeDeleted = null)
+    {
+        var parts = new List<string> { $"mes={MonthValue(month ?? _month)}" };
+        var finalStatus = clearStatus ? null : status ?? _status;
+        if (finalStatus is not null)
+        {
+            parts.Add($"situacao={StatusSlug(finalStatus.Value)}");
+        }
+
+        if (_studentId is not null)
+        {
+            parts.Add($"aluno={_studentId}");
+        }
+
+        if (includeDeleted ?? _includeDeleted)
+        {
+            parts.Add("excluidas=1");
+        }
+
+        return "/personal/aulas?" + string.Join("&", parts);
+    }
+}

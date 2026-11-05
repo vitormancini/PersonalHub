@@ -1,0 +1,137 @@
+@page "/aluno/aulas"
+@attribute [Authorize(Roles = AppRoles.Student)]
+@layout StudentLayout
+@using PersonalHub.Web.Domain
+@using PersonalHub.Web.Domain.Lessons
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Lessons.RespondLesson
+@inject StudentLessonsQuery Query
+@inject RespondLessonHandler Handler
+@inject NavigationManager Navigation
+
+@* SSR estático. Um único formulário "confirmar" fica sempre na página (vazio); cada botão "Confirmar" o envia pelo
+   atributo form= com o id da aula. Assim o POST encontra o formulário mesmo se a aula já tiver sido respondida em
+   outra aba, e o handler devolve a mensagem certa. *@
+
+<PersonalPageHeader Title="Minhas aulas" />
+
+<form id="confirmar-aula" method="post" @formname="confirmar" @onsubmit="ConfirmAsync" data-ph-busy-form>
+    <AntiforgeryToken />
+</form>
+
+@if (_view is null)
+{
+    return;
+}
+
+<div class="ph-detail">
+    @if (_view.PersonalNames.Count > 0)
+    {
+        <p class="ph-page-intro">Aulas com @LessonDisplay.JoinNames(_view.PersonalNames)</p>
+    }
+
+    <StudentLessonNotice Code="@Aviso" />
+
+    <section class="ph-stack-section" aria-labelledby="para-confirmar">
+        <h2 id="para-confirmar" class="ph-section-title">Para confirmar</h2>
+        @if (_view.Pending.Count == 0)
+        {
+            <div class="ph-card ph-all-done" role="status">
+                <p class="ph-list-title">Tudo em dia</p>
+                <p class="mb-0">Nenhuma aula esperando sua confirmação.</p>
+            </div>
+        }
+        else
+        {
+            <ul class="ph-list">
+                @foreach (var item in _view.Pending)
+                {
+                    <li class="ph-pending-card">
+                        <a href="/aluno/aulas/@item.Id" class="ph-pending-link">
+                            <span class="ph-list-title">@LessonDisplay.ShortDate(item.OccurredAtUtc) às @LessonDisplay.Time(item.OccurredAtUtc)</span>
+                            <span class="ph-list-subtitle">@item.PersonalName · @LessonDisplay.Summary(item.DurationMinutes, item.UnitPrice)</span>
+                        </a>
+                        <div class="ph-grid-2">
+                            <a href="/aluno/aulas/@item.Id/recusar" class="ph-btn ph-btn-danger-outline">Recusar</a>
+                            <button type="submit" form="confirmar-aula" name="aula" value="@item.Id" class="ph-btn ph-btn-primary"
+                                    data-ph-busy-text="Confirmando…">
+                                <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                                <span class="ph-btn-text">Confirmar</span>
+                            </button>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    @if (_view.History.Count > 0)
+    {
+        @foreach (var month in _view.History.GroupBy(i => MonthOf(i.OccurredAtUtc)))
+        {
+            var headingId = $"mes-{month.Key:yyyyMM}";
+            <section class="ph-stack-section" aria-labelledby="@headingId">
+                <h2 id="@headingId" class="ph-section-title">@LessonDisplay.Month(month.Key)</h2>
+                <ul class="ph-list">
+                    @foreach (var item in month)
+                    {
+                        <li>
+                            <a href="/aluno/aulas/@item.Id" class="ph-list-item">
+                                <span class="ph-list-text">
+                                    <span class="ph-list-title">@LessonDisplay.ShortDate(item.OccurredAtUtc) às @LessonDisplay.Time(item.OccurredAtUtc)</span>
+                                    <span class="ph-list-subtitle">
+                                        @(item.Deleted ? "Excluída pelo personal" : $"{item.PersonalName} · {LessonDisplay.Summary(item.DurationMinutes, item.UnitPrice)}")
+                                    </span>
+                                </span>
+                                <span class="ph-pill @LessonDisplay.StatusPillClass(item.Status, item.Deleted)">@LessonDisplay.StatusLabel(item.Status, item.Deleted)</span>
+                                <svg class="ph-list-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    }
+    else if (_view.Pending.Count == 0)
+    {
+        <p class="ph-note ph-center-text">As aulas que o seu personal registrar aparecem aqui.</p>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "aviso")]
+    private string? Aviso { get; set; }
+
+    [SupplyParameterFromForm(FormName = "confirmar", Name = "aula")]
+    private Guid? ConfirmLessonId { get; set; }
+
+    private StudentLessonsView? _view;
+
+    private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _view = await Query.GetAsync(UserId, HttpContext.RequestAborted);
+    }
+
+    private static DateOnly MonthOf(DateTime utc)
+    {
+        var day = SaoPaulo.ToLocalDate(utc);
+        return new DateOnly(day.Year, day.Month, 1);
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (ConfirmLessonId is not { } lessonId)
+        {
+            Navigation.NavigateTo("/aluno/aulas");
+            return;
+        }
+
+        var outcome = await Handler.ApproveAsync(UserId, lessonId, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+        Navigation.NavigateTo($"/aluno/aulas?aviso={StudentLessonNotice.CodeFor(outcome, rejected: false)}");
+    }
+}
