@@ -1,12 +1,14 @@
 @page "/personal/alunos/{PersonalStudentId:guid}/convite-criado"
-@attribute [Authorize(Roles = AppRoles.Personal)]
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
 @layout PersonalLayout
 @using PersonalHub.Web.Features.Authentication
 @using PersonalHub.Web.Domain
 @using PersonalHub.Web.Domain.Students
+@using PersonalHub.Web.Infrastructure.Hosting
 @inject InviteCreatedQuery Query
 @inject CreatedInviteHandoff Handoff
 @inject NavigationManager Navigation
+@inject PublicUrls PublicUrls
 
 <PersonalPageHeader Title="Convite do aluno" BackHref="/personal/alunos" BackLabel="Voltar para alunos" />
 
@@ -94,7 +96,8 @@
         var token = Handoff.Take(HttpContext, userId, PersonalStudentId);
         if (token is not null)
         {
-            _inviteUrl = Navigation.ToAbsoluteUri($"/convite/{token}").ToString();
+            // Endereço configurado, não o Host da requisição: o link sai da aplicação pelo WhatsApp.
+            _inviteUrl = PublicUrls.Absolute($"/convite/{token}", Navigation.BaseUri);
             _whatsAppUrl = WhatsAppInvite.Url(_view.StudentPhone,
                 WhatsAppInvite.Message(_view.StudentName, _view.PersonalName, _inviteUrl));
         }

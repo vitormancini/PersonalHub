@@ -1,5 +1,5 @@
 @page "/personal/alunos"
-@attribute [Authorize(Roles = AppRoles.Personal)]
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
 @layout PersonalLayout
 
 @* A lista de alunos chega na Fase 2; por enquanto, só o acesso ao cadastro. *@

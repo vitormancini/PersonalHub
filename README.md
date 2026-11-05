@@ -103,6 +103,25 @@ O personal cadastra o aluno em **Alunos → Novo aluno** (`/personal/alunos/novo
 - O aluno abre o link, cria a senha (ou entra com a senha atual, se o e-mail já tiver conta), aceita os termos e cai em `/aluno`.
 - O caminho `/convite/*` é limitado a 20 requisições por minuto por IP (`Students:InviteRateLimit`), responde com `Referrer-Policy: no-referrer` e aparece nos logs como `/convite/[redacted]`.
 
+## Autorização
+
+Toda rota exige login por padrão (`FallbackPolicy`). Uma página nova sem atributo fica protegida; as públicas precisam de `[AllowAnonymous]` explícito: `/`, `/entrar`, `/convite/{token}`, `/termos`, `/privacidade`, `/Error`, `/not-found`, `/health`, `POST /sair` e os arquivos estáticos. O teste `AuthorizationPolicyTests` falha se uma rota pública nova aparecer fora dessa lista.
+
+As páginas do personal usam a policy `ActivePersonal`: role `Personal` **e** perfil ativo no banco, conferido a cada requisição. Um personal desativado com o cookie ainda válido tem a sessão encerrada e volta para `/entrar`.
+
+## Configuração de produção
+
+Fora de Development, dois valores são obrigatórios (variáveis de ambiente ou o serviço de segredos da hospedagem; nada disso vai para o repositório):
+
+| Chave | Variável de ambiente | Exemplo | Para quê |
+| --- | --- | --- | --- |
+| `App:PublicBaseUrl` | `App__PublicBaseUrl` | `https://app.exemplo.com` | Endereço público usado nos links enviados para fora, como o do convite. URL `https` absoluta, sem caminho. |
+| `AllowedHosts` | `AllowedHosts` | `app.exemplo.com` | Hosts aceitos pela aplicação (separados por `;`). |
+
+- Sem `App:PublicBaseUrl` válida, a aplicação **não sobe** (erro na inicialização citando a chave). O link do convite nunca usa o header `Host` da requisição, que o cliente controla.
+- `appsettings.Production.json` traz `AllowedHosts` com o placeholder `configure-o-dominio.invalid`. Se ele não for trocado, toda requisição recebe 400.
+- Em Development, `App:PublicBaseUrl` é opcional. Sem ela, os links usam o endereço da requisição.
+
 ## Observabilidade
 
 **Logs.** A aplicação escreve logs no console, com o formato definido pelo ambiente:

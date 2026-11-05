@@ -115,9 +115,15 @@ public sealed class AccessTests(DatabaseFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Logout_DoesNotAcceptGet()
     {
+        // Logado: anônimo cairia na política padrão (login) antes de chegar ao 405.
+        var account = await _factory.CreateAccountAsync(AppRoles.Personal);
+        await _client.PostLoginAsync(account.Email, account.Password);
+
         var response = await _client.GetAsync("/sair");
 
         Assert.NotEqual(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Null(AuthTestHelpers.AuthCookieHeader(response));
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/personal")).StatusCode);
     }
 
     [Fact]

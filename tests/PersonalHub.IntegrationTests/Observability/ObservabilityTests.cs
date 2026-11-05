@@ -1,10 +1,12 @@
 using System.Net;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using PersonalHub.IntegrationTests.Infrastructure;
 using PersonalHub.Web.Infrastructure.Observability;
 
 namespace PersonalHub.IntegrationTests.Observability;
@@ -122,6 +124,10 @@ public class ObservabilityTests
             // Banco inexistente: estes testes não dependem do PostgreSQL.
             builder.UseSetting("ConnectionStrings:PersonalHub", "Host=127.0.0.1;Port=1;Database=personalhub_tests;Username=x;Password=x;Timeout=1");
 
+            // Obrigatórios em Production (appsettings.Production.json traz só placeholders).
+            builder.UseSetting(TestApp.PublicBaseUrlKey, TestApp.PublicBaseUrl);
+            builder.UseSetting("AllowedHosts", "localhost");
+
             builder.ConfigureServices(services =>
             {
                 // Endpoint que lança exceção, existente só no host de teste. Entra depois do pipeline da
@@ -137,12 +143,26 @@ public class ObservabilityTests
 
     private sealed class ThrowingEndpointStartupFilter : IStartupFilter
     {
+        // Toda rota exige login por padrão; o endpoint de teste é anônimo para a exceção chegar ao handler.
+        private static readonly Endpoint ThrowingEndpoint = new(
+            _ => throw new InvalidOperationException("detalhe-secreto que não pode aparecer"),
+            new EndpointMetadataCollection(new AllowAnonymousAttribute()),
+            "Teste: lança exceção");
+
+        // Define o endpoint antes do roteamento (que respeita um endpoint já definido), para a requisição passar
+        // pela autorização e pelo exception handler da aplicação como uma rota normal.
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
         {
+            app.Use((HttpContext context, RequestDelegate nextMiddleware) =>
+            {
+                if (context.Request.Path == ThrowPath)
+                {
+                    context.SetEndpoint(ThrowingEndpoint);
+                }
+
+                return nextMiddleware(context);
+            });
             next(app);
-            app.Use((HttpContext context, RequestDelegate _) => context.Request.Path == ThrowPath
-                ? throw new InvalidOperationException("detalhe-secreto que não pode aparecer")
-                : Task.CompletedTask);
         };
     }
 }

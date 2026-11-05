@@ -1,5 +1,5 @@
 @page "/personal/alunos/novo"
-@attribute [Authorize(Roles = AppRoles.Personal)]
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
 @layout PersonalLayout
 @using PersonalHub.Web.Features.Authentication
 @inject CreateStudentHandler Handler

@@ -6,6 +6,11 @@ namespace PersonalHub.IntegrationTests.Infrastructure;
 
 public static class TestApp
 {
+    public const string PublicBaseUrlKey = "App:PublicBaseUrl";
+
+    /// <summary>Endereço público usado nos links (obrigatório fora de Development); igual ao do cliente de teste.</summary>
+    public const string PublicBaseUrl = "https://localhost";
+
     /// <summary>
     /// Host de teste ligado ao banco de testes. Os limites por IP (login e convite) ficam altos para não interferir;
     /// os testes de rate limiting passam o próprio valor em <paramref name="settings"/>.
@@ -21,6 +26,7 @@ public static class TestApp
             builder.UseSetting("ConnectionStrings:PersonalHub", connectionString);
             builder.UseSetting("Authentication:LoginRateLimit:PermitLimit", "1000");
             builder.UseSetting("Students:InviteRateLimit:PermitLimit", "1000");
+            builder.UseSetting(PublicBaseUrlKey, PublicBaseUrl);
             foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
             {
                 builder.UseSetting(key, value);

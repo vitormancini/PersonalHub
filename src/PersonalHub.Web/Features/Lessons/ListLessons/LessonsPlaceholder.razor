@@ -1,5 +1,5 @@
 @page "/personal/aulas"
-@attribute [Authorize(Roles = AppRoles.Personal)]
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
 @layout PersonalLayout
 
 <PersonalPageHeader Title="Aulas" />
