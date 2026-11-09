@@ -28,6 +28,12 @@
             <p>Esta aula não está mais disponível para resposta. O personal pode tê-la excluído.</p>
         </div>
         break;
+    case NotConfirmed:
+        <div class="ph-alert ph-alert-danger" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>Não foi possível confirmar a aula. Tente de novo.</p>
+        </div>
+        break;
 }
 
 @code {
@@ -35,6 +41,9 @@
     public const string Rejected = "recusada";
     public const string AlreadyResponded = "ja-respondida";
     public const string Unavailable = "indisponivel";
+
+    /// <summary>O envio de "Confirmar" chegou sem a aula (formulário incompleto): nada foi alterado.</summary>
+    public const string NotConfirmed = "nao-confirmada";
 
     [Parameter]
     public string? Code { get; set; }

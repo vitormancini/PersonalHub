@@ -231,6 +231,20 @@ public sealed class StudentLessonsTests(DatabaseFixture fixture) : IAsyncLifetim
     }
 
     [Fact]
+    public async Task ConfirmFromList_WithoutLesson_ShowsErrorAndChangesNothing()
+    {
+        var lesson = await _factory.AddLessonAsync(_linkId);
+
+        var response = await _student.Client.PostWithTokenFromAsync("/aluno/aulas", "confirmar", tokenPage: "/aluno/aulas");
+
+        Assert.Equal("/aluno/aulas?aviso=nao-confirmada", response.RedirectTarget());
+        var list = await StudentPageAsync(response.RedirectTarget());
+        Assert.Contains("Não foi possível confirmar a aula. Tente de novo.", list);
+        Assert.DoesNotContain("Aula confirmada.", list);
+        await AssertUntouchedAsync(lesson.Id);
+    }
+
+    [Fact]
     public async Task ConfirmFromDetails_Approves()
     {
         var lesson = await _factory.AddLessonAsync(_linkId);

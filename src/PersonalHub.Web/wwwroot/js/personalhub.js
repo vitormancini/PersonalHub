@@ -52,7 +52,10 @@ document.addEventListener('submit', (event) => {
         button.dataset.phIdleText = label.textContent;
         label.textContent = button.dataset.phBusyText;
         button.setAttribute('aria-busy', 'true');
-        button.disabled = true;
+        // Desabilita só depois de o formulário ser montado: um botão desabilitado durante o evento sai dos dados
+        // enviados (envio nativo e aprimorado do Blazor), e o name/value do botão (por exemplo, o id da aula em
+        // "Confirmar" da lista do aluno) se perderia. O envio duplo já é barrado pela checagem de aria-busy acima.
+        setTimeout(() => { button.disabled = true; }, 0);
     }
 });
 

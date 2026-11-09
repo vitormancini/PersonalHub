@@ -127,7 +127,8 @@
     {
         if (ConfirmLessonId is not { } lessonId)
         {
-            Navigation.NavigateTo("/aluno/aulas");
+            // Envio sem a aula (por exemplo, o botão ficou fora dos dados do formulário): avisa em vez de ignorar.
+            Navigation.NavigateTo($"/aluno/aulas?aviso={StudentLessonNotice.NotConfirmed}");
             return;
         }
 
