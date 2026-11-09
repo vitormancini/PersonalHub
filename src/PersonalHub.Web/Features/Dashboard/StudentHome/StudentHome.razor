@@ -1,12 +1,50 @@
 @page "/aluno"
 @attribute [Authorize(Roles = AppRoles.Student)]
-@layout AppLayout
+@layout StudentLayout
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Lessons.StudentLessons
+@inject StudentLessonsQuery Lessons
 
-<PageTitle>Início · PersonalHub</PageTitle>
+@* Resumo provisório até a home do aluno (Fase 7): mostra se há aulas esperando resposta. *@
 
-<h1 class="ph-page-title">Início</h1>
-<div class="ph-card">
-    <p class="mb-0">
-        Esta área está em construção. Em breve você vai confirmar suas aulas e ver o demonstrativo do mês por aqui.
-    </p>
+<PersonalPageHeader Title="Início" />
+
+@if (_pending is null)
+{
+    return;
+}
+
+<div class="ph-detail">
+    @if (_pending > 0)
+    {
+        <a href="/aluno/aulas" class="ph-list-item ph-home-pending">
+            <span class="ph-counter-value">@_pending</span>
+            <span class="ph-list-text">
+                <span class="ph-list-title">@(_pending == 1 ? "Aula para confirmar" : "Aulas para confirmar")</span>
+                <span class="ph-list-subtitle">Confira e responda em Minhas aulas.</span>
+            </span>
+            <svg class="ph-list-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+        </a>
+    }
+    else
+    {
+        <div class="ph-card">
+            <p class="mb-0">Tudo em dia. Nenhuma aula esperando sua confirmação.</p>
+        </div>
+    }
+
+    <a href="/aluno/aulas" class="ph-btn ph-btn-outline ph-btn-block">Ver minhas aulas</a>
 </div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private int? _pending;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        _pending = await Lessons.PendingCountAsync(userId, HttpContext.RequestAborted);
+    }
+}

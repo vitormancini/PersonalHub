@@ -1,0 +1,199 @@
+@page "/personal/aulas/nova"
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
+@layout PersonalLayout
+@using System.Globalization
+@using PersonalHub.Web.Domain
+@using PersonalHub.Web.Domain.Lessons
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Students
+@using PersonalHub.Web.Features.Students.CreateStudent
+@inject RegisterLessonQuery Query
+@inject RegisterLessonHandler Handler
+@inject TimeProvider Clock
+@inject NavigationManager Navigation
+
+@* SSR estático com antiforgery. Sem JavaScript tudo funciona; com ele, o cartão do valor e o aviso de convite
+   acompanham o aluno escolhido (personalhub.js, data-ph-lesson-student). Toda validação é do handler. *@
+
+<PersonalPageHeader Title="Registrar aula" BackHref="/personal/aulas" BackLabel="Voltar para aulas" />
+
+@if (_students is null)
+{
+    return;
+}
+
+@* No POST o formulário sempre aparece: o Blazor precisa dele para receber o envio e mostrar o erro. *@
+@if (_students.Count == 0 && !HttpMethods.IsPost(HttpContext.Request.Method))
+{
+    <div class="ph-empty">
+        <div class="ph-status-icon ph-status-info" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6M22 11h-6" /></svg>
+        </div>
+        <h2 class="ph-result-title">Nenhum aluno para registrar aula</h2>
+        <p class="ph-result-text">Cadastre um aluno ou reative um vínculo para registrar aulas.</p>
+        <a href="/personal/alunos/novo" class="ph-btn ph-btn-primary ph-btn-block">Cadastrar aluno</a>
+    </div>
+    return;
+}
+
+<EditForm EditContext="_editContext" FormName="nova-aula" OnSubmit="SubmitAsync" novalidate class="ph-form" data-ph-busy-form>
+    @if (_duplicate is not null)
+    {
+        <div class="ph-alert ph-alert-warning" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg>
+            <p>@($"Já existe uma aula de {FirstName(_selected)} em {LessonDisplay.Date(_duplicate.Value)} às {LessonDisplay.Time(_duplicate.Value)}. Se for outra aula, registre mesmo assim.")</p>
+        </div>
+        <input type="hidden" name="Input.ConfirmedDuplicate" value="@_duplicateKey" />
+    }
+
+    <section class="ph-section-card" aria-labelledby="dados-aula">
+        <h2 id="dados-aula" class="ph-section-title">Aula</h2>
+
+        <div class="ph-field">
+            <label for="aula-aluno" class="ph-label">Aluno</label>
+            <InputSelect id="aula-aluno" @bind-Value="Input.StudentId" class="ph-input ph-select"
+                         data-ph-lesson-student aria-describedby="aula-aluno-error aula-aluno-convite">
+                <option value="">Escolha o aluno</option>
+                @foreach (var student in _students)
+                {
+                    <option value="@student.Id" data-name="@WhatsAppInvite.FirstName(student.Name)"
+                            data-price="@StudentDisplay.Money(student.LessonPrice)" data-invited="@(student.Invited ? "true" : "false")">
+                        @student.Name
+                    </option>
+                }
+            </InputSelect>
+            <ValidationMessage For="() => Input.StudentId" id="aula-aluno-error" class="ph-field-error" />
+            <p id="aula-aluno-convite" class="ph-field-hint" data-ph-lesson-invited hidden="@(_selected?.Invited != true)">
+                <span data-ph-lesson-name>@FirstName(_selected)</span> ainda não aceitou o convite. A aula fica aguardando
+                até criar a conta.
+            </p>
+        </div>
+
+        <div class="ph-grid-2">
+            <div class="ph-field">
+                <label for="aula-data" class="ph-label">Data</label>
+                <InputText id="aula-data" type="date" @bind-Value="Input.Date" class="ph-input" max="@_today"
+                           aria-describedby="aula-data-error" />
+                <ValidationMessage For="() => Input.Date" id="aula-data-error" class="ph-field-error" />
+            </div>
+
+            <div class="ph-field">
+                <label for="aula-hora" class="ph-label">Horário</label>
+                <InputText id="aula-hora" type="time" @bind-Value="Input.Time" class="ph-input"
+                           aria-describedby="aula-hora-error" />
+                <ValidationMessage For="() => Input.Time" id="aula-hora-error" class="ph-field-error" />
+            </div>
+        </div>
+
+        @* Radios estilizados como botões. Com JavaScript, tocar de novo no escolhido desmarca (duração é opcional). *@
+        <fieldset class="ph-field">
+            <legend class="ph-label">Duração <span class="ph-optional">(opcional)</span></legend>
+            <div class="ph-chips" data-ph-toggle-radios>
+                @foreach (var minutes in LessonRules.Durations)
+                {
+                    var value = minutes.ToString(CultureInfo.InvariantCulture);
+                    <label class="ph-chip">
+                        <input type="radio" name="Input.Duration" value="@value" checked="@(Input.Duration == value)"
+                               aria-describedby="aula-duracao-error" />
+                        <span>@minutes min</span>
+                    </label>
+                }
+            </div>
+            <ValidationMessage For="() => Input.Duration" id="aula-duracao-error" class="ph-field-error" />
+        </fieldset>
+
+        <div class="ph-field">
+            <label for="aula-obs" class="ph-label">Observação <span class="ph-optional">(opcional)</span></label>
+            <InputTextArea id="aula-obs" @bind-Value="Input.Notes" class="ph-input ph-textarea" rows="3"
+                           maxlength="@LessonRules.TextMaxLength" aria-describedby="aula-obs-hint aula-obs-error" />
+            <span id="aula-obs-hint" class="ph-field-hint">O aluno vê a observação.</span>
+            <ValidationMessage For="() => Input.Notes" id="aula-obs-error" class="ph-field-error" />
+        </div>
+    </section>
+
+    <section class="ph-price-card" aria-live="polite">
+        <div data-ph-lesson-info hidden="@(_selected is null)">
+            <p class="ph-price-label">Valor desta aula</p>
+            <p class="ph-price-value" data-ph-lesson-price>@(_selected is null ? null : StudentDisplay.Money(_selected.LessonPrice))</p>
+            <p class="ph-note">
+                Vem do cadastro de <span data-ph-lesson-name>@FirstName(_selected)</span> e fica fixo nesta aula.
+            </p>
+        </div>
+        <p class="ph-note" data-ph-lesson-empty hidden="@(_selected is not null)">Escolha o aluno para ver o valor da aula.</p>
+    </section>
+
+    <div class="ph-stack-tight">
+        <button type="submit" class="ph-btn ph-btn-primary ph-btn-block" data-ph-busy-text="Registrando…">
+            <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <span class="ph-btn-text">@(_duplicate is null ? "Registrar aula" : "Registrar mesmo assim")</span>
+        </button>
+        <p class="ph-caption" data-ph-lesson-info hidden="@(_selected is null)">
+            <span data-ph-lesson-name>@FirstName(_selected)</span> recebe a aula no app para confirmar.
+        </p>
+    </div>
+</EditForm>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "nova-aula")]
+    private RegisterLessonInput Input { get; set; } = default!;
+
+    /// <summary>Vem do detalhe do aluno ("Registrar aula"): já deixa o aluno escolhido.</summary>
+    [SupplyParameterFromQuery(Name = "aluno")]
+    private Guid? Aluno { get; set; }
+
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _messages = default!;
+    private IReadOnlyList<LessonStudentOption>? _students;
+    private LessonStudentOption? _selected;
+    private string _today = string.Empty;
+    private DateTime? _duplicate;
+    private string? _duplicateKey;
+
+    private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _today = SaoPaulo.ToLocalDate(Clock.GetUtcNow().UtcDateTime).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        Input ??= new RegisterLessonInput { Date = _today, StudentId = Aluno?.ToString() };
+        _editContext = new EditContext(Input);
+        _messages = new ValidationMessageStore(_editContext);
+        _students = await Query.StudentsAsync(UserId, HttpContext.RequestAborted);
+        Select();
+    }
+
+    private void Select() =>
+        _selected = Guid.TryParse(Input.StudentId, out var id) ? _students?.FirstOrDefault(s => s.Id == id) : null;
+
+    private static string FirstName(LessonStudentOption? student) =>
+        student is null ? string.Empty : WhatsAppInvite.FirstName(student.Name);
+
+    private async Task SubmitAsync()
+    {
+        var result = await Handler.HandleAsync(
+            new RegisterLessonCommand(UserId, Input, HttpContext.TraceIdentifier), HttpContext.RequestAborted);
+
+        switch (result.Outcome)
+        {
+            case RegisterLessonOutcome.Succeeded:
+                // PRG: volta para a lista no mês da aula, que pode ser retroativa.
+                var month = SaoPaulo.ToLocalDate(result.OccurredAtUtc!.Value).ToString("yyyy-MM", CultureInfo.InvariantCulture);
+                Navigation.NavigateTo($"/personal/aulas?mes={month}&aviso=registrada");
+                return;
+            case RegisterLessonOutcome.PossibleDuplicate:
+                _duplicate = result.OccurredAtUtc;
+                _duplicateKey = result.DuplicateKey;
+                break;
+            case RegisterLessonOutcome.Forbidden:
+                HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                break;
+        }
+
+        // A lista pode ter mudado (aluno inativado em outra aba): o select mostra o estado atual.
+        _students = await Query.StudentsAsync(UserId, HttpContext.RequestAborted);
+        Select();
+        ServerValidation.Show(_editContext, _messages, result.Errors);
+    }
+}

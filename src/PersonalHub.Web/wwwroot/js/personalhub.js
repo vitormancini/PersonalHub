@@ -28,7 +28,12 @@ document.addEventListener('submit', (event) => {
         return;
     }
 
-    const button = form.querySelector('button[type="submit"][data-ph-busy-text]');
+    // O botão que enviou (pode estar fora do <form>, ligado por form=). Um botão sem data-ph-busy-text (por exemplo,
+    // uma sugestão que só preenche um campo) não bloqueia o formulário.
+    const submitter = event.submitter;
+    const button = submitter
+        ? (submitter.matches('[data-ph-busy-text]') ? submitter : null)
+        : form.querySelector('button[type="submit"][data-ph-busy-text]');
     if (button?.getAttribute('aria-busy') === 'true') {
         event.preventDefault();
         return;
@@ -113,4 +118,62 @@ document.addEventListener('input', (event) => {
         const met = passwordRules[item.dataset.rule]?.(input.value) ?? false;
         item.dataset.met = String(met);
     });
+});
+
+// Registrar aula: o cartão do valor e o aviso de convite acompanham o aluno escolhido no
+// <select data-ph-lesson-student>. Os textos vêm dos data-* de cada <option>, gerados pelo servidor.
+document.addEventListener('change', (event) => {
+    const select = event.target;
+    if (!(select instanceof HTMLSelectElement) || !select.hasAttribute('data-ph-lesson-student')) {
+        return;
+    }
+
+    const form = select.form;
+    const option = select.selectedOptions[0];
+    const chosen = Boolean(option?.value);
+    form.querySelectorAll('[data-ph-lesson-info]').forEach((element) => { element.hidden = !chosen; });
+    form.querySelectorAll('[data-ph-lesson-empty]').forEach((element) => { element.hidden = chosen; });
+    form.querySelectorAll('[data-ph-lesson-invited]').forEach((element) => {
+        element.hidden = !chosen || option.dataset.invited !== 'true';
+    });
+    if (!chosen) {
+        return;
+    }
+
+    form.querySelectorAll('[data-ph-lesson-name]').forEach((element) => { element.textContent = option.dataset.name; });
+    form.querySelectorAll('[data-ph-lesson-price]').forEach((element) => { element.textContent = option.dataset.price; });
+});
+
+// Radios opcionais em <div data-ph-toggle-radios>: tocar de novo no escolhido desmarca.
+document.addEventListener('click', (event) => {
+    const radio = event.target;
+    if (!(radio instanceof HTMLInputElement) || radio.type !== 'radio' || !radio.closest('[data-ph-toggle-radios]')) {
+        return;
+    }
+
+    if ((radio.dataset.phWasChecked ?? String(radio.defaultChecked)) === 'true') {
+        radio.checked = false;
+    }
+
+    radio.closest('[data-ph-toggle-radios]').querySelectorAll('input[type="radio"]').forEach((other) => {
+        other.dataset.phWasChecked = String(other.checked);
+    });
+});
+
+// Sugestões que preenchem um campo: <button data-ph-fill="id-do-campo" data-ph-fill-value="texto">. Sem
+// JavaScript o botão envia o formulário e o servidor preenche o campo.
+document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-ph-fill]');
+    if (!button) {
+        return;
+    }
+
+    const field = document.getElementById(button.dataset.phFill);
+    if (!field) {
+        return;
+    }
+
+    event.preventDefault();
+    field.value = button.dataset.phFillValue;
+    field.focus();
 });

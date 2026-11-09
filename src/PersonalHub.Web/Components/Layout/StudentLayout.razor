@@ -1,0 +1,33 @@
+@inherits LayoutComponentBase
+
+@* Área do aluno: mesmo cabeçalho e barra de abas da área do personal. As páginas preenchem o cabeçalho com
+   <PersonalPageHeader>, que só escreve nas seções do layout em uso. *@
+<div class="ph-shell">
+    <header class="ph-shell-header">
+        <div class="ph-shell-header-inner">
+            <SectionOutlet SectionName="@PersonalPageHeader.BackSection" />
+            <h1 class="ph-shell-title" tabindex="-1"><SectionOutlet SectionName="@PersonalPageHeader.TitleSection" /></h1>
+            <SectionOutlet SectionName="@PersonalPageHeader.ActionSection" />
+            @* POST com antiforgery: um link GET permitiria deslogar o usuário a partir de outro site. *@
+            <form method="post" action="/sair" class="m-0">
+                <AntiforgeryToken />
+                <button type="submit" class="ph-btn ph-btn-on-dark ph-btn-sm">Sair</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="ph-shell-main">
+        @Body
+    </main>
+
+    <ShellTabBar Tabs="Tabs" />
+</div>
+
+@code {
+    private static readonly ShellTabBar.Tab[] Tabs =
+    [
+        new("Início", "/aluno", true, ShellTabBar.HomeIcon),
+        new("Aulas", "/aluno/aulas", false, ShellTabBar.LessonsIcon),
+        new("Pagamentos", "/aluno/pagamentos", false, ShellTabBar.MoneyIcon)
+    ];
+}

@@ -1,0 +1,140 @@
+@page "/personal/aulas/{LessonId:guid}/excluir"
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
+@layout PersonalLayout
+@using PersonalHub.Web.Domain.Lessons
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Lessons.LessonDetails
+@using PersonalHub.Web.Features.Students.CreateStudent
+@inject LessonDetailsQuery Query
+@inject DeleteLessonHandler Handler
+@inject NavigationManager Navigation
+
+@* Confirmação como página própria (não um modal), como a de inativar vínculo: funciona sem JavaScript, e o botão
+   voltar do celular cancela. O motivo é obrigatório se o aluno já respondeu (D-042); o handler confere de novo com
+   a aula travada. *@
+
+<PersonalPageHeader Title="Excluir aula" BackHref="@DetailsHref" BackLabel="Voltar para a aula" />
+
+@if (_view is null)
+{
+    return;
+}
+
+<section class="ph-confirm" aria-labelledby="confirmar-titulo">
+    <h2 id="confirmar-titulo" class="ph-confirm-title">
+        Excluir a aula de @LessonDisplay.DayMonth(_view.OccurredAtUtc) às @LessonDisplay.Time(_view.OccurredAtUtc)?
+    </h2>
+
+    @if (_reasonRequired)
+    {
+        <p class="ph-confirm-text">
+            @FirstName já respondeu esta aula. Vai ver que a aula foi excluída e o motivo que você escrever.
+        </p>
+    }
+    else
+    {
+        <p class="ph-confirm-text">
+            @FirstName ainda não respondeu. A aula some da lista e não entra em nenhum demonstrativo.
+        </p>
+    }
+
+    <form method="post" @formname="excluir-aula" @onsubmit="DeleteAsync" class="ph-form" novalidate data-ph-busy-form>
+        <AntiforgeryToken />
+        <div class="ph-field">
+            <label for="excluir-motivo" class="ph-label">
+                Motivo @if (!_reasonRequired)
+                {
+                    <span class="ph-optional">(opcional)</span>
+                }
+            </label>
+            <textarea id="excluir-motivo" name="motivo" class="ph-input ph-textarea @(_error is null ? null : "invalid")" rows="3"
+                      maxlength="@LessonRules.TextMaxLength" required="@_reasonRequired" aria-invalid="@(_error is null ? null : "true")"
+                      aria-describedby="excluir-motivo-error">@Motivo</textarea>
+            @if (_error is not null)
+            {
+                <span id="excluir-motivo-error" class="ph-field-error">@_error</span>
+            }
+        </div>
+
+        <div class="ph-stack-tight">
+            <button type="submit" class="ph-btn ph-btn-danger ph-btn-block" data-ph-busy-text="Excluindo…">
+                <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span class="ph-btn-text">Excluir aula</span>
+            </button>
+            <a href="@DetailsHref" class="ph-btn ph-btn-outline ph-btn-block">Cancelar</a>
+        </div>
+    </form>
+</section>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public Guid LessonId { get; set; }
+
+    [SupplyParameterFromForm(FormName = "excluir-aula", Name = "motivo")]
+    private string? Motivo { get; set; }
+
+    private LessonDetailsView? _view;
+    private bool _reasonRequired;
+    private string? _error;
+
+    private string DetailsHref => $"/personal/aulas/{LessonId}";
+
+    private string FirstName => WhatsAppInvite.FirstName(_view!.StudentName);
+
+    private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _view = await Query.ForPersonalAsync(UserId, LessonId, HttpContext.RequestAborted);
+        if (_view is null)
+        {
+            // Aula de outro personal ou inexistente: mesma resposta, sem revelar qual dos dois.
+            Navigation.NotFound();
+            return;
+        }
+
+        if (_view.Deleted)
+        {
+            // Já excluída (outra aba): só mostra o resultado.
+            Navigation.NavigateTo(DetailsHref);
+            return;
+        }
+
+        _reasonRequired = _view.Status != LessonStatus.Pending;
+    }
+
+    private async Task DeleteAsync()
+    {
+        var outcome = await Handler.HandleAsync(UserId, LessonId, Motivo, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+        switch (outcome)
+        {
+            case DeleteLessonOutcome.Succeeded:
+                Navigation.NavigateTo($"{DetailsHref}?aviso=excluida");
+                return;
+            case DeleteLessonOutcome.AlreadyDeleted:
+                Navigation.NavigateTo(DetailsHref);
+                return;
+            case DeleteLessonOutcome.ReasonRequired:
+                // O aluno pode ter respondido depois que a página abriu: recarrega para mostrar o texto certo.
+                await LoadAsync();
+                _reasonRequired = true;
+                _error = $"Conte para {FirstName} por que a aula foi excluída.";
+                return;
+            case DeleteLessonOutcome.ReasonTooLong:
+                _error = $"O motivo pode ter até {LessonRules.TextMaxLength} caracteres.";
+                return;
+            default:
+                _view = null;
+                Navigation.NotFound();
+                return;
+        }
+    }
+}

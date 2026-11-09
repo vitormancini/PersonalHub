@@ -465,42 +465,6 @@ html, body {
 
 /* ---------- Área logada ---------- */
 
-.ph-app {
-    min-height: 100vh;
-    min-height: 100dvh;
-    background: var(--ph-background);
-}
-
-.ph-app-header {
-    background: var(--ph-navy);
-}
-
-.ph-app-header-inner,
-.ph-app-main {
-    max-width: 960px;
-    margin: 0 auto;
-    padding-left: 16px;
-    padding-right: 16px;
-}
-
-.ph-app-header-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 64px;
-}
-
-.ph-app-main {
-    padding-top: 24px;
-    padding-bottom: 24px;
-}
-
-.ph-page-title {
-    margin: 0 0 16px;
-    font-size: 26px;
-    font-weight: 800;
-}
-
 .ph-card {
     padding: 20px;
     background: var(--ph-surface);
@@ -1346,4 +1310,395 @@ a.ph-btn-primary:hover {
     .ph-btn-danger {
         height: 48px;
     }
+}
+
+/* ---------- Aulas (Fase 3) ---------- */
+
+:root {
+    --ph-pill-danger-bg: #FEF3F2;
+    --ph-pill-danger-text: #912018;
+}
+
+.ph-tabbar-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.ph-pill-danger {
+    color: var(--ph-pill-danger-text);
+    background: var(--ph-pill-danger-bg);
+    border-color: var(--ph-danger-border);
+}
+
+.ph-optional {
+    font-weight: 500;
+    color: var(--ph-text-muted);
+}
+
+fieldset.ph-field {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+}
+
+.ph-textarea {
+    height: auto;
+    min-height: 96px;
+    padding: 12px 16px;
+    resize: vertical;
+}
+
+/* Navegação de mês */
+
+.ph-month-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.ph-month-label {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    text-align: center;
+}
+
+.ph-month-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    color: var(--ph-text);
+    background: var(--ph-surface);
+    border: 1px solid var(--ph-border);
+    border-radius: 12px;
+}
+
+.ph-month-arrow:hover {
+    color: var(--ph-text);
+    border-color: var(--ph-input-border);
+}
+
+.ph-month-arrow:focus-visible {
+    outline: 3px solid var(--ph-focus);
+    outline-offset: 1px;
+}
+
+.ph-month-arrow.is-disabled {
+    color: #CDD5DF;
+    background: transparent;
+}
+
+.ph-month-arrow svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* Contadores que filtram */
+
+.ph-counters {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.ph-counter {
+    display: grid;
+    gap: 2px;
+    min-height: 72px;
+    padding: 12px;
+    color: var(--ph-text);
+    text-decoration: none;
+    background: var(--ph-surface);
+    border: 1px solid var(--ph-border);
+    border-top-width: 4px;
+    border-radius: 14px;
+}
+
+.ph-counter:hover {
+    color: var(--ph-text);
+    border-color: var(--ph-input-border);
+}
+
+.ph-counter:focus-visible {
+    outline: 3px solid var(--ph-focus);
+    outline-offset: 1px;
+}
+
+.ph-counter-aguardando {
+    border-top-color: var(--ph-warning-border);
+}
+
+.ph-counter-confirmadas {
+    border-top-color: #75E0A7;
+}
+
+.ph-counter-recusadas {
+    border-top-color: var(--ph-danger-border);
+}
+
+.ph-counter.is-active {
+    color: #FFFFFF;
+    background: var(--ph-navy);
+    border-color: var(--ph-navy);
+}
+
+.ph-counter-value {
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.ph-counter-label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.ph-inline {
+    display: flex;
+    gap: 8px;
+}
+
+.ph-inline .ph-input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Lista agrupada por dia */
+
+.ph-day {
+    display: grid;
+    gap: 8px;
+}
+
+.ph-day-title {
+    margin: 4px 0 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ph-text-muted);
+}
+
+.ph-lesson-time {
+    min-width: 48px;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--ph-text);
+}
+
+/* Registrar aula */
+
+.ph-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ph-chip {
+    position: relative;
+}
+
+.ph-chip input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+}
+
+.ph-chip span,
+.ph-chip-button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 16px;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ph-text);
+    background: var(--ph-surface);
+    border: 1px solid var(--ph-input-border);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.ph-chip input:checked + span {
+    color: #FFFFFF;
+    background: var(--ph-primary);
+    border-color: var(--ph-primary);
+}
+
+.ph-chip input:focus-visible + span,
+.ph-chip-button:focus-visible {
+    outline: 3px solid var(--ph-focus);
+    outline-offset: 2px;
+}
+
+.ph-chip-button:hover {
+    border-color: var(--ph-primary);
+}
+
+.ph-price-card {
+    padding: 16px 18px;
+    background: var(--ph-info-bg);
+    border: 1px solid var(--ph-info-border);
+    border-radius: 16px;
+}
+
+.ph-price-label {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ph-info-text);
+}
+
+.ph-price-value {
+    margin: 2px 0 6px;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--ph-text);
+}
+
+/* Detalhe da aula */
+
+.ph-lesson-head {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    text-align: center;
+}
+
+.ph-lesson-when {
+    margin: 0;
+    font-size: 15px;
+    color: var(--ph-text-muted);
+}
+
+.ph-alert-body {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.ph-reason,
+.ph-dd-text {
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+.ph-facts dd.ph-dd-text {
+    font-weight: 500;
+}
+
+.ph-facts-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.ph-timeline {
+    display: grid;
+    gap: 14px;
+    margin: 0;
+    padding: 0 0 0 20px;
+    list-style: none;
+    border-left: 2px solid var(--ph-border);
+}
+
+.ph-timeline li {
+    position: relative;
+    display: grid;
+    gap: 2px;
+}
+
+.ph-timeline li::before {
+    content: "";
+    position: absolute;
+    top: 5px;
+    left: -27px;
+    width: 12px;
+    height: 12px;
+    background: var(--ph-primary);
+    border: 2px solid var(--ph-surface);
+    border-radius: 50%;
+}
+
+.ph-timeline li.is-waiting::before {
+    background: var(--ph-warning-border);
+}
+
+.ph-timeline-title {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.ph-timeline-meta {
+    font-size: 13px;
+    color: var(--ph-text-muted);
+}
+
+.ph-confirm-text {
+    margin: 0;
+    font-size: 15px;
+    color: var(--ph-text);
+}
+
+/* Área do aluno */
+
+.ph-stack-section {
+    display: grid;
+    gap: 10px;
+}
+
+.ph-all-done p:first-child {
+    margin-bottom: 2px;
+    color: var(--ph-text);
+}
+
+.ph-pending-card {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    background: var(--ph-surface);
+    border: 1.5px solid var(--ph-warning-border);
+    border-radius: 16px;
+}
+
+.ph-pending-link {
+    display: grid;
+    gap: 2px;
+    color: var(--ph-text);
+    text-decoration: none;
+    border-radius: 8px;
+}
+
+.ph-pending-link:hover {
+    color: var(--ph-text);
+    text-decoration: underline;
+}
+
+.ph-pending-link:focus-visible {
+    outline: 3px solid var(--ph-focus);
+    outline-offset: 2px;
+}
+
+.ph-pending-card .ph-btn {
+    height: 48px;
+}
+
+.ph-home-pending {
+    border-color: var(--ph-warning-border);
+}
+
+.ph-home-pending .ph-counter-value {
+    min-width: 44px;
+    text-align: center;
+    color: var(--ph-pill-pending-text);
+}
+
+.ph-center-text {
+    text-align: center;
 }

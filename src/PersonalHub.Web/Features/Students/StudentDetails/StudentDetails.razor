@@ -5,7 +5,11 @@
 @using PersonalHub.Web.Domain.Students
 @using PersonalHub.Web.Features.Students.CreateStudent
 @using PersonalHub.Web.Features.Students.ManageInvite
+@using PersonalHub.Web.Domain
+@using PersonalHub.Web.Features.Lessons.ListLessons
 @inject StudentDetailsQuery Query
+@inject ListLessonsQuery LessonsQuery
+@inject TimeProvider Clock
 @inject InviteActionsHandler InviteActions
 @inject CreatedInviteHandoff Handoff
 @inject NavigationManager Navigation
@@ -132,11 +136,34 @@
         </dl>
     </section>
 
-    @if (_view.Status == PersonalStudentStatus.Active)
+    @if (_lessons is not null)
     {
         <section class="ph-section-card" aria-labelledby="aulas">
-            <h3 id="aulas" class="ph-section-title">Aulas</h3>
-            <p class="ph-note">O histórico de aulas deste aluno aparece aqui a partir da Fase 3.</p>
+            <div class="ph-section-heading">
+                <h3 id="aulas" class="ph-section-title">Aulas</h3>
+                <span class="ph-note">@LessonDisplay.Month(_month)</span>
+            </div>
+            <dl class="ph-facts ph-facts-3">
+                <div>
+                    <dt>Aguardando</dt>
+                    <dd>@_lessons.Pending</dd>
+                </div>
+                <div>
+                    <dt>Confirmadas</dt>
+                    <dd>@_lessons.Approved</dd>
+                </div>
+                <div>
+                    <dt>Recusadas</dt>
+                    <dd>@_lessons.Rejected</dd>
+                </div>
+            </dl>
+            <div class="ph-grid-2">
+                @if (_view.Status != PersonalStudentStatus.Inactive)
+                {
+                    <a href="/personal/aulas/nova?aluno=@PersonalStudentId" class="ph-btn ph-btn-outline">Registrar aula</a>
+                }
+                <a href="/personal/aulas?aluno=@PersonalStudentId" class="ph-btn ph-btn-outline">Ver aulas</a>
+            </div>
         </section>
     }
 
@@ -162,6 +189,8 @@
 
     private StudentDetailsView? _view;
     private bool _notInvited;
+    private LessonCounts? _lessons;
+    private DateOnly _month;
 
     /// <summary>Mensagem de sucesso depois de um redirecionamento (PRG). Só textos fixos: nada vem da URL para a tela.</summary>
     private string? Notice => Aviso switch
@@ -185,7 +214,13 @@
         {
             // Vínculo de outro personal ou inexistente: mesma resposta, sem revelar qual dos dois.
             Navigation.NotFound();
+            return;
         }
+
+        // Resumo do mês corrente (D-026): o detalhe completo fica na lista de aulas filtrada pelo aluno.
+        var today = SaoPaulo.ToLocalDate(Clock.GetUtcNow().UtcDateTime);
+        _month = new DateOnly(today.Year, today.Month, 1);
+        _lessons = await LessonsQuery.CountsAsync(UserId, _month, PersonalStudentId, HttpContext.RequestAborted);
     }
 
     private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;
