@@ -29,12 +29,12 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
   Critério: personal gerencia somente alunos associados a ele.
 
 ## Fase 3 — Aulas
-- [ ] Registrar aula.
-- [ ] Listar aulas e filtrar por mês/estado/aluno.
-- [ ] Detalhar aula.
-- [ ] Reconhecer/aprovar aula pelo aluno.
-- [ ] Recusar aula pelo aluno.
-- [ ] Excluir aula pelo personal com auditoria e motivo quando exigido.
+- [x] Registrar aula (2026-11-09): D-039 e aviso de possível duplicada (D-040).
+- [x] Listar aulas e filtrar por mês/estado/aluno (2026-11-09).
+- [x] Detalhar aula (2026-11-09): visão do personal e do aluno; aula não editável (D-041).
+- [x] Reconhecer/aprovar aula pelo aluno (2026-11-09): "Confirmar" (D-038), resposta única (D-041).
+- [x] Recusar aula pelo aluno (2026-11-09): motivo obrigatório até 500 caracteres, com sugestões.
+- [x] Excluir aula pelo personal com auditoria e motivo quando exigido (2026-11-09): D-042.
   Critério: transições de estado e permissões testadas; histórico consistente.
 
 ## Fase 4 — Demonstrativo e faturamento
@@ -42,6 +42,7 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
 - [ ] Gerar demonstrativo com snapshot.
 - [ ] Visualizar aulas e total do período.
 - [ ] Consultar faturamento mensal do personal.
+- [ ] Crédito no próximo demonstrativo para aula excluída depois de cobrada em período fechado (D-023, pendente desde a Fase 3/D-042).
   Critério: cálculo reproduzível, rastreável e coberto por testes.
 
 ## Fase 5 — Pagamentos informados
