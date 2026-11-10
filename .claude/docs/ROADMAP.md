@@ -38,11 +38,11 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
   Critério: transições de estado e permissões testadas; histórico consistente.
 
 ## Fase 4 — Demonstrativo e faturamento
-- [ ] Definir período de cobrança e regras de cálculo.
-- [ ] Gerar demonstrativo com snapshot.
-- [ ] Visualizar aulas e total do período.
-- [ ] Consultar faturamento mensal do personal.
-- [ ] Crédito no próximo demonstrativo para aula excluída depois de cobrada em período fechado (D-023, pendente desde a Fase 3/D-042).
+- [x] Definir período de cobrança e regras de cálculo (2026-11-10): D-043, D-044, D-046.
+- [x] Gerar demonstrativo com snapshot (2026-11-10): fechamento por `BackgroundService` com advisory lock (D-047) e comando `close-billing`.
+- [x] Visualizar aulas e total do período (2026-11-10): demonstrativo para o personal e para o aluno (D-048).
+- [x] Consultar faturamento mensal do personal (2026-11-10): `/personal/financeiro` por mês de vencimento, com prévia do que ainda vai fechar.
+- [x] Crédito no próximo demonstrativo para aula excluída depois de cobrada em período fechado (2026-11-10): D-045.
   Critério: cálculo reproduzível, rastreável e coberto por testes.
 
 ## Fase 5 — Pagamentos informados

@@ -185,6 +185,8 @@ Criado somente pelo script de provisionamento (D-027).
 
 O índice único `(PersonalStudentId, ReferenceMonth)` torna o job de fechamento idempotente: rodar duas vezes não cria dois demonstrativos.
 
+Fechamento (D-043 a D-047): no vencimento, a partir de 00:00 de São Paulo, entram as aulas `Approved` não excluídas, de antes do fim do mês de referência, confirmadas antes desse corte e ainda não cobradas. Sem aula nem crédito novo, nada é emitido. Total zero nasce `Paid` com `PaidAtUtc`. A regra está em `Domain/Billing/BillingClosing` (funções puras); o job só busca e grava.
+
 ### 4.7 BillingPeriodItem
 
 | Coluna | Tipo | Regras |
@@ -195,7 +197,7 @@ O índice único `(PersonalStudentId, ReferenceMonth)` torna o job de fechamento
 | Description | varchar(200) | texto congelado para o demonstrativo |
 | Amount | numeric(12,2) | positivo em `Lesson`, negativo em crédito |
 
-Índice único `(LessonId, Kind)`: uma aula é cobrada no máximo uma vez e creditada no máximo uma vez. Se os créditos passarem do total, o saldo vai para o mês seguinte (D-023).
+Índice único `(LessonId, Kind)`: uma aula é cobrada no máximo uma vez e creditada no máximo uma vez. Se os créditos passarem do total, o saldo vai para o mês seguinte (D-023): o próximo demonstrativo recebe um `Adjustment` sem `LessonId` ("Saldo de crédito de {mês}"). O saldo de um demonstrativo é a parte negativa da soma dos seus itens, então não precisa de coluna própria.
 
 ### 4.8 Payment
 

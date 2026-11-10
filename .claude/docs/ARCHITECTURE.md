@@ -119,6 +119,15 @@ O agente deve comparar alternativas (por exemplo, BackgroundService persistente 
 
 O processamento deve ser idempotente: reiniciar a aplicação ou executar o job mais de uma vez não pode emitir cobranças duplicadas.
 
+**Escolha (D-047, Fase 4):** `BackgroundService` no próprio app (`Features/Billing/CloseBilling/BillingClosingWorker`), que roda na partida e a cada hora (`Billing:Closing:Interval`; `Billing:Closing:Enabled` desliga, como nos testes).
+
+- O job não depende de "o que mudou desde a última vez": a cada execução olha o banco e fecha o mês mais recente já vencido de cada vínculo que ainda não tem demonstrativo. Um dia perdido (app fora do ar, deploy) é recuperado na execução seguinte; não é um timer em memória como mecanismo único.
+- O resultado não depende da hora em que roda: o corte é 00:00 de São Paulo no dia do vencimento (D-043).
+- Concorrência: `pg_try_advisory_lock` de sessão garante uma execução por vez entre instâncias; quem não pega o lock pula a rodada. Cada vínculo fecha numa transação própria com `SELECT ... FOR UPDATE` no vínculo; os índices únicos `(PersonalStudentId, ReferenceMonth)` e `(LessonId, Kind)` são a última barreira.
+- Falha num vínculo é logada e não interrompe os outros. Logs com ids e contagens, sem nomes ou valores de aula.
+- Alternativa descartada no MVP: agendador gerenciado (EventBridge Scheduler chamando um endpoint protegido). Fica como opção se o app passar a escalar a zero ou se o fechamento precisar sair do processo web.
+- Execução manual: `dotnet run --project src/PersonalHub.Web -- close-billing [--date aaaa-mm-dd]` (`--date` só em Development).
+
 ## 8. Docker local
 
 Criar `docker-compose.yml` para PostgreSQL com:
