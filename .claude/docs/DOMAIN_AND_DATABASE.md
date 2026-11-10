@@ -206,11 +206,14 @@ Fechamento (D-043 a D-047): no vencimento, a partir de 00:00 de São Paulo, entr
 | BillingPeriodId | uuid | FK período |
 | Amount | numeric(12,2) | igual ao total do período (D-024) |
 | Status | varchar(16) | `Reported`, `Confirmed`, `Rejected` |
-| ReportedByUserId, ReportedAtUtc | | o aluno que informou |
+| ReportedByUserId, ReportedAtUtc | | o aluno que informou (o personal, no registro direto) |
 | DecidedByUserId, DecidedAtUtc | null | o personal que confirmou ou recusou |
-| Notes | varchar(500) null | opcional, sem comprovante no MVP |
+| Notes | varchar(500) null | observação opcional do aluno, sem comprovante no MVP |
+| DecisionNote | varchar(500) null | mensagem opcional do personal ao recusar, visível ao aluno; só com `Rejected` (D-051) |
 
-Índice único `(BillingPeriodId)` onde `Status IN ('Reported','Confirmed')`: só um pagamento ativo por período.
+Índice único `(BillingPeriodId)` onde `Status IN ('Reported','Confirmed')`: só um pagamento ativo por período. Índice `(BillingPeriodId, ReportedAtUtc)` para o histórico (D-053).
+
+Registro direto pelo personal (D-052): `Confirmed` com `ReportedByUserId = DecidedByUserId` (o personal) e mesmo instante; não há coluna de origem, porque o aluno nunca decide. As transições estão em `Domain/Billing/Payment` e `BillingPeriod`; o handler trava o período com `FOR UPDATE`.
 
 ### 4.9 NotificationOutbox
 Fila persistente de notificações a enviar:
@@ -269,10 +272,11 @@ stateDiagram-v2
     Issued --> PaymentReported : aluno informa pagamento
     PaymentReported --> Issued : personal recusa o aviso
     PaymentReported --> Paid : personal confirma
+    Issued --> Paid : personal registra o recebimento (D-052)
     Paid --> [*]
 ```
 
-Cada aviso do aluno cria um `Payment` em `Reported`. A confirmação muda o pagamento para `Confirmed` e o período para `Paid` na mesma transação; a recusa muda o pagamento para `Rejected` e devolve o período para `Issued`. Demonstrativo com total zero já nasce `Paid`.
+Cada aviso do aluno cria um `Payment` em `Reported`. A confirmação muda o pagamento para `Confirmed` e o período para `Paid` na mesma transação; a recusa muda o pagamento para `Rejected` (com a mensagem opcional) e devolve o período para `Issued`, e o aluno pode informar de novo. O registro direto cria o pagamento já `Confirmed`. `Paid` é definitivo (D-053). Demonstrativo com total zero já nasce `Paid` e não aceita aviso.
 
 ## 6. Identity e vínculo
 

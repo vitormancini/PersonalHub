@@ -1,0 +1,105 @@
+@page "/aluno/pagamentos/{BillingPeriodId:guid}/informar"
+@attribute [Authorize(Roles = AppRoles.Student)]
+@layout StudentLayout
+@using PersonalHub.Web.Domain.Billing
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Billing
+@using PersonalHub.Web.Features.Billing.Statement
+@inject StatementQuery Query
+@inject PaymentHandler Handler
+@inject NavigationManager Navigation
+
+@* Confirmação como página própria: funciona sem JavaScript e o botão voltar do celular cancela. Sempre o valor total
+   (D-024, D-049); o handler confere a situação com o demonstrativo travado. *@
+
+<PersonalPageHeader Title="Informar pagamento" BackHref="@DetailsHref" BackLabel="Voltar para o demonstrativo" />
+
+<form method="post" @formname="informar" @onsubmit="SubmitAsync" class="ph-confirm" novalidate data-ph-busy-form
+      aria-labelledby="informar-titulo">
+    <AntiforgeryToken />
+    @if (_view is not null)
+    {
+        <h2 id="informar-titulo" class="ph-confirm-title">Você já pagou o @_view.PersonalName?</h2>
+        <p class="ph-confirm-amount">@BillingDisplay.MonthName(_view.ReferenceMonth) · valor total @BillingDisplay.Money(_view.TotalAmount)</p>
+        <p class="ph-confirm-text">
+            O pagamento é do valor total do demonstrativo. O @_view.PersonalName recebe o aviso e confirma quando conferir.
+        </p>
+
+        <div class="ph-field">
+            <label for="informar-observacao" class="ph-label">
+                Observação para o @_view.PersonalName <span class="ph-optional">(opcional)</span>
+            </label>
+            <textarea id="informar-observacao" name="observacao" class="ph-input ph-textarea @(_error is null ? null : "invalid")" rows="3"
+                      maxlength="@Payment.TextMaxLength" placeholder="Ex.: Paguei por Pix no dia 10"
+                      aria-invalid="@(_error is null ? null : "true")" aria-describedby="informar-observacao-error">@Observacao</textarea>
+            @if (_error is not null)
+            {
+                <span id="informar-observacao-error" class="ph-field-error">@_error</span>
+            }
+        </div>
+
+        <div class="ph-stack-tight">
+            <button type="submit" class="ph-btn ph-btn-primary ph-btn-block" data-ph-busy-text="Informando…">
+                <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span class="ph-btn-text">Sim, informar pagamento</span>
+            </button>
+            <a href="@DetailsHref" class="ph-btn ph-btn-outline ph-btn-block">Ainda não paguei</a>
+        </div>
+    }
+</form>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public Guid BillingPeriodId { get; set; }
+
+    [SupplyParameterFromForm(FormName = "informar", Name = "observacao")]
+    private string? Observacao { get; set; }
+
+    private StatementView? _view;
+    private string? _error;
+
+    private string DetailsHref => $"/aluno/pagamentos/{BillingPeriodId}";
+
+    private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _view = await Query.ForStudentAsync(UserId, BillingPeriodId, HttpContext.RequestAborted);
+        if (HttpMethods.IsPost(HttpContext.Request.Method))
+        {
+            // O POST sempre chega ao handler, que decide com o demonstrativo travado.
+            return;
+        }
+
+        if (_view is null)
+        {
+            Navigation.NotFound();
+        }
+        else if (_view.Status != BillingPeriodStatus.Issued)
+        {
+            // Já informado ou pago (outra aba): mostra o demonstrativo como está.
+            Navigation.NavigateTo(DetailsHref);
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        var outcome = await Handler.ReportAsync(UserId, BillingPeriodId, Observacao, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+        switch (outcome)
+        {
+            case PaymentOutcome.TextTooLong:
+                _error = $"A observação pode ter até {Payment.TextMaxLength} caracteres.";
+                return;
+            case PaymentOutcome.NotFound:
+                _view = null;
+                Navigation.NotFound();
+                return;
+            default:
+                Navigation.NavigateTo($"{DetailsHref}?aviso={PaymentNotice.CodeFor(outcome, PaymentNotice.Reported)}");
+                return;
+        }
+    }
+}

@@ -5,13 +5,23 @@
 @using PersonalHub.Web.Domain
 @using PersonalHub.Web.Features.Authentication
 @using PersonalHub.Web.Features.Billing
+@using PersonalHub.Web.Features.Billing.Payments
+@using PersonalHub.Web.Features.Students.CreateStudent
 @inject PersonalBillingQuery Query
+@inject PaymentHandler Handler
+@inject NavigationManager Navigation
 @inject TimeProvider Clock
 
 @* SSR estático. O mês vai na query string (?mes=2026-11) e agrupa os demonstrativos pelo VENCIMENTO: é o mês em que
-   o dinheiro entra. Só aparecem vínculos do personal logado. *@
+   o dinheiro entra. Só aparecem vínculos do personal logado. "Pagamentos para confirmar" mostra todos os meses.
+   Um único formulário "confirmar" fica sempre na página (vazio); cada botão "Confirmar" o envia pelo atributo form=
+   com o id do demonstrativo, como o "Confirmar" das aulas do aluno. *@
 
 <PersonalPageHeader Title="Financeiro" />
+
+<form id="confirmar-pagamento" method="post" @formname="confirmar" @onsubmit="ConfirmAsync" data-ph-busy-form>
+    <AntiforgeryToken />
+</form>
 
 @if (_view is null)
 {
@@ -19,6 +29,44 @@
 }
 
 <div class="ph-detail">
+    <PaymentNotice Code="@Aviso" />
+
+    @if (_view.ToConfirm.Count > 0)
+    {
+        <section class="ph-stack-section" aria-labelledby="para-confirmar">
+            <h2 id="para-confirmar" class="ph-section-title">Pagamentos para confirmar</h2>
+            <ul class="ph-list">
+                @foreach (var item in _view.ToConfirm)
+                {
+                    <li class="ph-confirm-pay-card">
+                        <a href="/personal/financeiro/@item.BillingPeriodId" class="ph-pending-link">
+                            <span class="ph-confirm-pay-head">
+                                <span>
+                                    <span class="ph-list-title">@item.StudentName</span>
+                                    <span class="ph-list-subtitle">@BillingDisplay.MonthName(item.ReferenceMonth) · informou em @BillingDisplay.DayMonthTime(item.ReportedAtUtc)</span>
+                                </span>
+                                <span class="ph-list-amount">@BillingDisplay.Money(item.TotalAmount)</span>
+                            </span>
+                        </a>
+                        @if (item.Notes is not null)
+                        {
+                            <p class="ph-quote">"@item.Notes"</p>
+                        }
+                        <div class="ph-grid-2">
+                            <a href="/personal/financeiro/@item.BillingPeriodId/nao-recebi" class="ph-btn ph-btn-danger-outline"
+                               aria-label="Não recebi o pagamento de @WhatsAppInvite.FirstName(item.StudentName)">Não recebi</a>
+                            <button type="submit" form="confirmar-pagamento" name="demonstrativo" value="@item.BillingPeriodId"
+                                    class="ph-btn ph-btn-primary" data-ph-busy-text="Confirmando…"
+                                    aria-label="Confirmar o pagamento de @WhatsAppInvite.FirstName(item.StudentName)">
+                                <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                                <span class="ph-btn-text">Confirmar</span>
+                            </button>
+                        </div>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
     <div>
         <nav class="ph-month-nav" aria-label="Mês">
             <a href="@Href(_month.AddMonths(-1))" class="ph-month-arrow" aria-label="Mês anterior: @BillingDisplay.MonthYear(_month.AddMonths(-1))">
@@ -129,6 +177,12 @@
     [SupplyParameterFromQuery(Name = "mes")]
     private string? Mes { get; set; }
 
+    [SupplyParameterFromQuery(Name = "aviso")]
+    private string? Aviso { get; set; }
+
+    [SupplyParameterFromForm(FormName = "confirmar", Name = "demonstrativo")]
+    private Guid? ConfirmPeriodId { get; set; }
+
     private PersonalBillingView? _view;
     private DateOnly _today;
     private DateOnly _currentMonth;
@@ -147,6 +201,21 @@
 
         var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
         _view = await Query.GetAsync(userId, _month, HttpContext.RequestAborted);
+    }
+
+    private async Task ConfirmAsync()
+    {
+        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        var code = PaymentNotice.NotSent;
+        if (ConfirmPeriodId is { } periodId)
+        {
+            // Demonstrativo de outro personal cai em NotFound, sem aviso: nada muda e nada é revelado.
+            var outcome = await Handler.ConfirmAsync(userId, periodId, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+            code = PaymentNotice.CodeFor(outcome, PaymentNotice.Confirmed);
+        }
+
+        // Volta para o mesmo mês, com o resumo já atualizado.
+        Navigation.NavigateTo(code is null ? Href(_month) : $"{Href(_month)}&aviso={code}");
     }
 
     private static string Href(DateOnly month) => $"/personal/financeiro?mes={month.ToString("yyyy-MM", CultureInfo.InvariantCulture)}";

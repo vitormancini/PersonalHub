@@ -1883,3 +1883,65 @@ a.ph-item-title:hover {
     border: 1.5px dashed var(--ph-input-border);
     border-radius: 16px;
 }
+
+/* ---------- Pagamentos informados (Fase 5) ---------- */
+
+.ph-pill-info {
+    color: var(--ph-info-text);
+    background: var(--ph-info-bg);
+    border-color: var(--ph-info-border);
+}
+
+/* Pagamento informado aguardando o personal: lista do financeiro. */
+.ph-confirm-pay-card {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    background: var(--ph-surface);
+    border: 1.5px solid var(--ph-info-border);
+    border-radius: 16px;
+}
+
+.ph-confirm-pay-card .ph-btn {
+    height: 48px;
+}
+
+.ph-confirm-pay-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ph-confirm-pay-head > span:first-child {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.ph-quote {
+    margin: 0;
+    font-size: 14px;
+    font-style: italic;
+    color: var(--ph-text);
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+.ph-timeline li.is-danger::before {
+    background: var(--ph-danger-border);
+}
+
+.ph-timeline li.is-success::before {
+    background: #17B26A;
+}
+
+.ph-confirm-amount {
+    padding: 12px 14px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ph-text);
+    background: var(--ph-info-bg);
+    border: 1px solid var(--ph-info-border);
+    border-radius: 12px;
+}

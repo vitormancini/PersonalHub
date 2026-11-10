@@ -17,7 +17,8 @@ public sealed record StudentPaymentsView(
     IReadOnlyList<StudentPreviewRow> Previews,
     IReadOnlyList<StudentStatementRow> Paid);
 
-public sealed record StudentOpenSummary(int Count, decimal Total);
+/// <summary>Demonstrativos em aberto; <paramref name="Reported"/> deles já têm pagamento informado.</summary>
+public sealed record StudentOpenSummary(int Count, decimal Total, int Reported);
 
 /// <summary>Demonstrativos do aluno logado em todos os vínculos dele (um aluno pode ter vários personais, D-015).</summary>
 public sealed class StudentPaymentsQuery(AppDbContext db, TimeProvider clock)
@@ -54,11 +55,12 @@ public sealed class StudentPaymentsQuery(AppDbContext db, TimeProvider clock)
 
     public async Task<StudentOpenSummary> OpenSummaryAsync(Guid studentUserId, CancellationToken cancellationToken)
     {
-        var totals = await db.BillingPeriods
+        var open = await db.BillingPeriods
             .Where(p => p.Status != BillingPeriodStatus.Paid)
-            .Join(Links(studentUserId), p => p.PersonalStudentId, l => l.Link.Id, (p, l) => p.TotalAmount)
+            .Join(Links(studentUserId), p => p.PersonalStudentId, l => l.Link.Id, (p, l) => new { p.TotalAmount, p.Status })
             .ToListAsync(cancellationToken);
-        return new StudentOpenSummary(totals.Count, totals.Sum());
+        return new StudentOpenSummary(open.Count, open.Sum(p => p.TotalAmount),
+            open.Count(p => p.Status == BillingPeriodStatus.PaymentReported));
     }
 
     private IQueryable<LinkRow> Links(Guid studentUserId) =>

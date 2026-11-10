@@ -48,6 +48,12 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 | D-040 | Possível duplicada | Mesmo vínculo, data e horário mostra aviso e exige "Registrar mesmo assim"; não bloqueia |
 | D-041 | Aula não editável | Correção = excluir e registrar outra; o aluno responde uma única vez |
 | D-042 | Exclusão lógica da aula | Pendente: motivo opcional e some para o aluno; respondida: motivo obrigatório e o aluno vê "Excluída" com o motivo |
+| D-049 | Aluno informa pagamento | Valor total do demonstrativo `Issued`, sem pagamento ativo; observação opcional até 500; período vai para "Pagamento informado" |
+| D-050 | Confirmação | Pela lista do Financeiro ou pelo detalhe; `Payment` `Confirmed` e período `Paid` na mesma transação |
+| D-051 | "Não recebi" | `Payment` `Rejected` com mensagem opcional (até 500, visível ao aluno); período volta a `Issued` e o aluno pode informar de novo |
+| D-052 | Registro direto | Personal marca como pago um demonstrativo `Issued` sem aviso do aluno (`Payment` `Confirmed` registrado pelo personal) |
+| D-053 | Histórico do pagamento | Demonstrativo mostra emitido, informado(s), recusado(s) e confirmado; confirmação definitiva |
+| D-054 | Avisos de pagamento | WhatsApp de informado/confirmado/recusado fica para a Fase 6; até lá, pendências no Financeiro |
 
 ## Pendências que exigem decisão
 
@@ -358,8 +364,53 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 - Data: 2026-11-10
 - Estado: Aprovada
 - Contexto: nomes técnicos de `BillingPeriodStatus`.
-- Decisão: `Issued` aparece como "Aguardando pagamento", `Paid` como "Pago" (`PaymentReported` fica para a Fase 5). Nesta fase não há como marcar pago, exceto total zero.
+- Decisão: `Issued` aparece como "Aguardando pagamento", `Paid` como "Pago" (`PaymentReported` fica para a Fase 5, como "Pagamento informado", D-049). Nesta fase não há como marcar pago, exceto total zero.
 - Consequências: rótulos centralizados em `BillingDisplay`.
+- Aprovado por: Vítor Mancini
+
+### D-049 — Aluno informa pagamento
+- Data: 2026-11-10
+- Estado: Aprovada
+- Contexto: Fase 5; D-024 definiu um pagamento integral por período.
+- Decisão: o aluno informa o pagamento do valor total do demonstrativo (sem parcial), com observação opcional até 500 caracteres. Só em demonstrativo `Issued` e sem pagamento ativo. O período vai para `PaymentReported` ("Pagamento informado").
+- Alternativas consideradas: pagamento parcial; comprovante anexado.
+- Consequências: vínculo inativo ainda pode informar. Total zero já nasce `Paid` e não aceita aviso. Informar duas vezes (ou em paralelo) cria um único `Payment`: o período é travado com `FOR UPDATE` e o índice único de pagamento ativo segura o resto. Auditado como `PaymentReported`, sem a observação.
+- Aprovado por: Vítor Mancini
+
+### D-050 — Confirmação do recebimento
+- Data: 2026-11-10
+- Estado: Aprovada
+- Decisão: o personal confirma pela lista do Financeiro ("Pagamentos para confirmar", de todos os meses) ou pelo detalhe do demonstrativo. `Payment` vira `Confirmed` e o período `Paid` (com `PaidAtUtc`) na mesma transação.
+- Consequências: o resumo Recebido/A receber do mês muda na hora. Auditado como `PaymentConfirmed`.
+- Aprovado por: Vítor Mancini
+
+### D-051 — "Não recebi"
+- Data: 2026-11-10
+- Estado: Aprovada
+- Decisão: o personal recusa o aviso com mensagem opcional (até 500, visível ao aluno). `Payment` vira `Rejected` e o período volta para `Issued`; o aluno pode informar de novo.
+- Consequências: nova coluna `Payment.DecisionNote` (`varchar(500)`, só com `Rejected`, `CK_Payment_DecisionNote`). O pagamento recusado fica no histórico. Auditado como `PaymentRejected`, sem a mensagem.
+- Aprovado por: Vítor Mancini
+
+### D-052 — Registro direto pelo personal
+- Data: 2026-11-10
+- Estado: Aprovada
+- Contexto: pagamento em dinheiro ou Pix já visto, sem aviso do aluno.
+- Decisão: o personal marca como pago um demonstrativo `Issued`, com uma confirmação simples. Gera `Payment` `Confirmed` e período `Paid`.
+- Alternativas consideradas: coluna `Source`/`RecordedByPersonal` no `Payment`.
+- Consequências: sem coluna nova: o registro direto tem `ReportedByUserId = DecidedByUserId =` personal e `ReportedAtUtc = DecidedAtUtc` (o aluno nunca decide, então a igualdade identifica o registro direto). Se o aluno informou enquanto isso, o personal é levado a confirmar o aviso. Auditado como `PaymentRecorded`.
+- Aprovado por: Vítor Mancini
+
+### D-053 — Histórico do pagamento
+- Data: 2026-11-10
+- Estado: Aprovada
+- Decisão: o demonstrativo mostra a linha do tempo com emitido, informado(s), recusado(s) e confirmado (ou registrado), com data e hora. Confirmação é definitiva: não há desfazer.
+- Consequências: depois de `Paid`, confirmar, recusar, registrar ou informar respondem "já está pago" sem alterar nada.
+- Aprovado por: Vítor Mancini
+
+### D-054 — Avisos de pagamento
+- Data: 2026-11-10
+- Estado: Aprovada
+- Decisão: avisos por WhatsApp de pagamento informado, confirmado e recusado ficam para a Fase 6. Até lá o personal vê as pendências no Financeiro e no Início.
 - Aprovado por: Vítor Mancini
 
 ## Modelo para novas decisões

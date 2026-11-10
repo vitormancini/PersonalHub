@@ -2,12 +2,14 @@
 @attribute [Authorize(Roles = AppRoles.Student)]
 @layout StudentLayout
 @using PersonalHub.Web.Domain
+@using PersonalHub.Web.Domain.Billing
 @using PersonalHub.Web.Features.Authentication
 @using PersonalHub.Web.Features.Billing
 @inject StudentPaymentsQuery Query
 @inject TimeProvider Clock
 
-@* Demonstrativos do aluno em todos os vínculos (D-015): em aberto, prévia do próximo e anteriores. *@
+@* Demonstrativos do aluno em todos os vínculos (D-015): em aberto (inclusive com pagamento informado, até o personal
+   confirmar), prévia do próximo e anteriores. *@
 
 <PersonalPageHeader Title="Pagamentos" />
 
@@ -34,7 +36,14 @@
                     <li class="ph-pay-card">
                         <div class="ph-pay-card-head">
                             <span class="ph-list-title">@BillingDisplay.MonthName(item.ReferenceMonth) · @item.PersonalName</span>
-                            <span class="ph-pill ph-pill-pending">@BillingDisplay.StudentDueBadge(item.DueDate, _today)</span>
+                            @if (item.Status == BillingPeriodStatus.PaymentReported)
+                            {
+                                <span class="ph-pill @BillingDisplay.StatusPillClass(item.Status)">@BillingDisplay.StatusLabel(item.Status)</span>
+                            }
+                            else
+                            {
+                                <span class="ph-pill ph-pill-pending">@BillingDisplay.StudentDueBadge(item.DueDate, _today)</span>
+                            }
                         </div>
                         <p class="ph-pay-card-value">@BillingDisplay.Money(item.TotalAmount)</p>
                         <p class="ph-list-subtitle mb-0">@(item.LessonCount == 1 ? "1 aula confirmada" : $"{item.LessonCount} aulas confirmadas")</p>

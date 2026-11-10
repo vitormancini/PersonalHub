@@ -1,0 +1,82 @@
+@* Aviso depois de uma ação de pagamento (PRG). Só textos fixos: nada vem da URL para a tela. *@
+
+@switch (Code)
+{
+    case Reported:
+        <div class="ph-alert ph-alert-success" role="status">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="m8 12 3 3 5-6" /></svg>
+            <p>Pagamento informado.</p>
+        </div>
+        break;
+    case Confirmed:
+        <div class="ph-alert ph-alert-success" role="status">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="m8 12 3 3 5-6" /></svg>
+            <p>Recebimento confirmado.</p>
+        </div>
+        break;
+    case Recorded:
+        <div class="ph-alert ph-alert-success" role="status">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="m8 12 3 3 5-6" /></svg>
+            <p>Recebimento registrado.</p>
+        </div>
+        break;
+    case Rejected:
+        <div class="ph-alert ph-alert-success" role="status">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="m8 12 3 3 5-6" /></svg>
+            <p>Pronto. O demonstrativo voltou para "Aguardando pagamento".</p>
+        </div>
+        break;
+    case AlreadyReported:
+        <div class="ph-alert ph-alert-warning" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>@(ForStudent ? "Você já tinha informado este pagamento." : "O pagamento já foi informado pelo aluno. Confira e confirme o recebimento.")</p>
+        </div>
+        break;
+    case AlreadyPaid:
+        <div class="ph-alert ph-alert-warning" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>Este demonstrativo já está pago.</p>
+        </div>
+        break;
+    case NotReported:
+        <div class="ph-alert ph-alert-warning" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>Este pagamento não está mais aguardando confirmação.</p>
+        </div>
+        break;
+    case NotSent:
+        <div class="ph-alert ph-alert-danger" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>Não foi possível confirmar o recebimento. Tente de novo.</p>
+        </div>
+        break;
+}
+
+@code {
+    public const string Reported = "informado";
+    public const string Confirmed = "recebido";
+    public const string Recorded = "registrado";
+    public const string Rejected = "nao-recebido";
+    public const string AlreadyReported = "ja-informado";
+    public const string AlreadyPaid = "ja-pago";
+    public const string NotReported = "sem-aviso";
+
+    /// <summary>O "Confirmar" da lista chegou sem o demonstrativo (formulário incompleto): nada foi alterado.</summary>
+    public const string NotSent = "nao-enviado";
+
+    [Parameter]
+    public string? Code { get; set; }
+
+    [Parameter]
+    public bool ForStudent { get; set; }
+
+    /// <summary>Código do aviso para o resultado; <paramref name="success"/> quando deu certo.</summary>
+    public static string? CodeFor(PaymentOutcome outcome, string success) => outcome switch
+    {
+        PaymentOutcome.Succeeded => success,
+        PaymentOutcome.AlreadyReported => AlreadyReported,
+        PaymentOutcome.AlreadyPaid => AlreadyPaid,
+        PaymentOutcome.NotReported => NotReported,
+        _ => null
+    };
+}

@@ -1,0 +1,85 @@
+@using PersonalHub.Web.Domain.Billing
+@using PersonalHub.Web.Features.Billing.Statement
+
+@* Linha do tempo do pagamento (D-053): emitido, informado(s), recusado(s) e confirmado, com data e hora. A
+   confirmação é definitiva. Os textos livres (observação do aluno, mensagem do personal) aparecem entre aspas. *@
+
+<section class="ph-section-card" aria-labelledby="historico-pagamento">
+    <h3 id="historico-pagamento" class="ph-section-title">@(ForStudent ? "Pagamento" : "Histórico do pagamento")</h3>
+    <ol class="ph-timeline">
+        <li>
+            <span class="ph-timeline-title">Demonstrativo emitido</span>
+            <span class="ph-timeline-meta">@BillingDisplay.DayMonthTime(View.IssuedAtUtc)</span>
+        </li>
+        @foreach (var payment in View.Payments)
+        {
+            @if (payment.RecordedByPersonal)
+            {
+                <li class="is-success">
+                    <span class="ph-timeline-title">Recebimento registrado por @Personal</span>
+                    <span class="ph-timeline-meta">@BillingDisplay.DayMonthTime(payment.DecidedAtUtc!.Value)</span>
+                </li>
+                continue;
+            }
+
+            <li>
+                <span class="ph-timeline-title">Pagamento informado por @Student</span>
+                <span class="ph-timeline-meta">@BillingDisplay.DayMonthTime(payment.ReportedAtUtc)</span>
+                @if (payment.Notes is not null)
+                {
+                    <p class="ph-quote">"@payment.Notes"</p>
+                }
+            </li>
+            @if (payment is { Status: PaymentStatus.Rejected, DecidedAtUtc: { } rejectedAt })
+            {
+                <li class="is-danger">
+                    <span class="ph-timeline-title">@(ForStudent ? $"{Personal} não recebeu" : "Você marcou que não recebeu")</span>
+                    <span class="ph-timeline-meta">@BillingDisplay.DayMonthTime(rejectedAt)</span>
+                    @if (payment.DecisionNote is not null)
+                    {
+                        <p class="ph-quote">"@payment.DecisionNote"</p>
+                    }
+                </li>
+            }
+            else if (payment is { Status: PaymentStatus.Confirmed, DecidedAtUtc: { } confirmedAt })
+            {
+                <li class="is-success">
+                    <span class="ph-timeline-title">Recebimento confirmado por @Personal</span>
+                    <span class="ph-timeline-meta">@BillingDisplay.DayMonthTime(confirmedAt)</span>
+                </li>
+            }
+        }
+        @if (View.Status == BillingPeriodStatus.PaymentReported)
+        {
+            <li class="is-waiting">
+                <span class="ph-timeline-title">Aguardando @(ForStudent ? View.PersonalName : "você") confirmar</span>
+                <span class="ph-timeline-meta">Sem prazo</span>
+            </li>
+        }
+        else if (View.Status == BillingPeriodStatus.Issued)
+        {
+            <li class="is-waiting">
+                <span class="ph-timeline-title">Aguardando pagamento</span>
+                <span class="ph-timeline-meta">@BillingDisplay.StudentDueBadge(View.DueDate, Today)</span>
+            </li>
+        }
+    </ol>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public StatementView View { get; set; } = default!;
+
+    [Parameter]
+    public bool ForStudent { get; set; }
+
+    [Parameter, EditorRequired]
+    public DateOnly Today { get; set; }
+
+    /// <summary>Quem fez a ação, do ponto de vista de quem lê.</summary>
+    private string Personal => ForStudent ? View.PersonalName : "você";
+
+    private string Student => ForStudent ? "você" : StudentFirstName;
+
+    private string StudentFirstName => Students.CreateStudent.WhatsAppInvite.FirstName(View.StudentName);
+}

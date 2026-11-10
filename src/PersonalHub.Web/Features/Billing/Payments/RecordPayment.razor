@@ -1,0 +1,86 @@
+@page "/personal/financeiro/{BillingPeriodId:guid}/registrar"
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
+@layout PersonalLayout
+@using PersonalHub.Web.Domain.Billing
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Billing
+@using PersonalHub.Web.Features.Billing.Statement
+@using PersonalHub.Web.Features.Students.CreateStudent
+@inject StatementQuery Query
+@inject PaymentHandler Handler
+@inject NavigationManager Navigation
+
+@* Registro direto do recebimento, sem aviso do aluno (D-052): por exemplo, pagamento em dinheiro. Confirmação simples
+   em página própria; é definitivo como a confirmação (D-053). *@
+
+<PersonalPageHeader Title="Registrar recebimento" BackHref="@DetailsHref" BackLabel="Voltar para o demonstrativo" />
+
+<form method="post" @formname="registrar" @onsubmit="SubmitAsync" class="ph-confirm" novalidate data-ph-busy-form
+      aria-labelledby="registrar-titulo">
+    <AntiforgeryToken />
+    @if (_view is not null)
+    {
+        <h2 id="registrar-titulo" class="ph-confirm-title">
+            Você recebeu os @BillingDisplay.Money(_view.TotalAmount) de @FirstName?
+        </h2>
+        <p class="ph-confirm-amount">@BillingDisplay.MonthName(_view.ReferenceMonth) · valor total @BillingDisplay.Money(_view.TotalAmount)</p>
+        <p class="ph-confirm-text">
+            O demonstrativo fica como pago e @FirstName vê que você registrou o recebimento. Não dá para desfazer.
+        </p>
+
+        <div class="ph-stack-tight">
+            <button type="submit" class="ph-btn ph-btn-primary ph-btn-block" data-ph-busy-text="Registrando…">
+                <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span class="ph-btn-text">Registrar recebimento</span>
+            </button>
+            <a href="@DetailsHref" class="ph-btn ph-btn-outline ph-btn-block">Cancelar</a>
+        </div>
+    }
+</form>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public Guid BillingPeriodId { get; set; }
+
+    private StatementView? _view;
+
+    private string DetailsHref => $"/personal/financeiro/{BillingPeriodId}";
+
+    private string FirstName => WhatsAppInvite.FirstName(_view!.StudentName);
+
+    private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _view = await Query.ForPersonalAsync(UserId, BillingPeriodId, HttpContext.RequestAborted);
+        if (HttpMethods.IsPost(HttpContext.Request.Method))
+        {
+            return;
+        }
+
+        if (_view is null)
+        {
+            Navigation.NotFound();
+        }
+        else if (_view.Status != BillingPeriodStatus.Issued)
+        {
+            Navigation.NavigateTo(DetailsHref);
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        var outcome = await Handler.RecordAsync(UserId, BillingPeriodId, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+        if (outcome == PaymentOutcome.NotFound)
+        {
+            _view = null;
+            Navigation.NotFound();
+            return;
+        }
+
+        Navigation.NavigateTo($"{DetailsHref}?aviso={PaymentNotice.CodeFor(outcome, PaymentNotice.Recorded)}");
+    }
+}
