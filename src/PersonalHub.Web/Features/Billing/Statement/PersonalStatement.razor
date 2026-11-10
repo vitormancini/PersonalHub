@@ -1,0 +1,59 @@
+@page "/personal/financeiro/{BillingPeriodId:guid}"
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
+@layout PersonalLayout
+@using System.Globalization
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Billing
+@inject StatementQuery Query
+@inject NavigationManager Navigation
+
+@* Somente leitura: o demonstrativo emitido nunca muda (D-023). Marcar como pago chega na Fase 5. *@
+
+<PersonalPageHeader Title="Demonstrativo" BackHref="@BackHref" BackLabel="Voltar para o financeiro" />
+
+@if (_view is null)
+{
+    return;
+}
+
+<div class="ph-detail">
+    <div class="ph-lesson-head">
+        <span class="ph-pill @BillingDisplay.StatusPillClass(_view.Status)">@BillingDisplay.StatusLabel(_view.Status)</span>
+        <h2 class="ph-profile-name">@_view.StudentName · @BillingDisplay.MonthYear(_view.ReferenceMonth)</h2>
+        <p class="ph-lesson-when">
+            Aulas de @BillingDisplay.DayMonth(_view.PeriodStart) a @BillingDisplay.DayMonth(_view.PeriodLastDay) · emitido em @LessonDisplay.Date(_view.IssuedAtUtc)
+        </p>
+    </div>
+
+    <StatementBody View="_view" />
+
+    <div class="ph-grid-2">
+        <a href="/personal/alunos/@_view.PersonalStudentId" class="ph-btn ph-btn-outline">Ver aluno</a>
+        <a href="/personal/aulas?aluno=@_view.PersonalStudentId&mes=@_view.ReferenceMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture)" class="ph-btn ph-btn-outline">Ver aulas</a>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public Guid BillingPeriodId { get; set; }
+
+    private StatementView? _view;
+
+    private string BackHref => _view is null
+        ? "/personal/financeiro"
+        : $"/personal/financeiro?mes={_view.DueDate.ToString("yyyy-MM", CultureInfo.InvariantCulture)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        _view = await Query.ForPersonalAsync(userId, BillingPeriodId, HttpContext.RequestAborted);
+        if (_view is null)
+        {
+            // Demonstrativo de outro personal ou inexistente: mesma resposta, sem revelar qual dos dois.
+            Navigation.NotFound();
+        }
+    }
+}

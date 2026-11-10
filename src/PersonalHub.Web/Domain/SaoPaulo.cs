@@ -27,7 +27,8 @@ public static class SaoPaulo
         return (StartOfDayUtc(start), StartOfDayUtc(start.AddMonths(1)));
     }
 
-    // Meia-noite pode não existir num dia de início de horário de verão (até 2019): aí o dia começa à 01:00.
-    private static DateTime StartOfDayUtc(DateOnly date) =>
+    /// <summary>Início do dia de São Paulo, em UTC.</summary>
+    /// <remarks>Meia-noite pode não existir num dia de início de horário de verão (até 2019): aí o dia começa à 01:00.</remarks>
+    public static DateTime StartOfDayUtc(DateOnly date) =>
         ToUtc(date, TimeOnly.MinValue) ?? ToUtc(date, new TimeOnly(1, 0))!.Value;
 }

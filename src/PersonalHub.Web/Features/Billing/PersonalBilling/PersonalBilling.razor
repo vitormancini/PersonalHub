@@ -1,0 +1,157 @@
+@page "/personal/financeiro"
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
+@layout PersonalLayout
+@using System.Globalization
+@using PersonalHub.Web.Domain
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Billing
+@inject PersonalBillingQuery Query
+@inject TimeProvider Clock
+
+@* SSR estático. O mês vai na query string (?mes=2026-11) e agrupa os demonstrativos pelo VENCIMENTO: é o mês em que
+   o dinheiro entra. Só aparecem vínculos do personal logado. *@
+
+<PersonalPageHeader Title="Financeiro" />
+
+@if (_view is null)
+{
+    return;
+}
+
+<div class="ph-detail">
+    <div>
+        <nav class="ph-month-nav" aria-label="Mês">
+            <a href="@Href(_month.AddMonths(-1))" class="ph-month-arrow" aria-label="Mês anterior: @BillingDisplay.MonthYear(_month.AddMonths(-1))">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6" /></svg>
+            </a>
+            <h2 class="ph-month-label" aria-live="polite">@BillingDisplay.MonthYear(_month)</h2>
+            @if (_month < _currentMonth)
+            {
+                <a href="@Href(_month.AddMonths(1))" class="ph-month-arrow" aria-label="Próximo mês: @BillingDisplay.MonthYear(_month.AddMonths(1))">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+                </a>
+            }
+            else
+            {
+                <span class="ph-month-arrow is-disabled" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+                </span>
+            }
+        </nav>
+        <p class="ph-caption ph-center-text ph-month-caption">Demonstrativos que vencem neste mês</p>
+    </div>
+
+    <section class="ph-section-card ph-billing-summary" aria-label="Resumo do mês">
+        <div>
+            <p class="ph-summary-label">Faturado</p>
+            <p class="ph-summary-value">@BillingDisplay.Money(_view.Billed)</p>
+            <p class="ph-caption">@Plural(_view.Statements.Count, "demonstrativo", "demonstrativos") · @BillingDisplay.Lessons(_view.LessonCount)</p>
+        </div>
+        <dl class="ph-facts ph-facts-2">
+            <div>
+                <dt>Recebido</dt>
+                <dd class="ph-amount-success">@BillingDisplay.Money(_view.Received)</dd>
+            </div>
+            <div>
+                <dt>A receber</dt>
+                <dd>@BillingDisplay.Money(_view.Receivable)</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="ph-stack-section" aria-labelledby="demonstrativos">
+        <h3 id="demonstrativos" class="ph-section-title">Demonstrativos</h3>
+        @if (_view.Statements.Count == 0)
+        {
+            <div class="ph-empty ph-card">
+                <div class="ph-status-icon ph-status-info" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="M6 2h9l5 5v15H6z" /><path d="M14 2v6h6M9 13h6M9 17h6" /></svg>
+                </div>
+                <p class="ph-result-title">Nenhum demonstrativo neste mês</p>
+                <p class="ph-result-text">
+                    @(_month == _currentMonth
+                        ? "Cada aluno recebe o demonstrativo no dia do vencimento, com as aulas confirmadas do mês anterior."
+                        : "Nenhum demonstrativo venceu neste mês.")
+                </p>
+            </div>
+        }
+        else
+        {
+            <ul class="ph-list">
+                @foreach (var item in _view.Statements)
+                {
+                    <li>
+                        <a href="/personal/financeiro/@item.Id" class="ph-list-item">
+                            <span class="ph-list-text">
+                                <span class="ph-list-title">@item.StudentName</span>
+                                <span class="ph-list-subtitle">
+                                    @BillingDisplay.MonthName(item.ReferenceMonth) · @BillingDisplay.DueText(item.DueDate, _today) · @BillingDisplay.Lessons(item.LessonCount)
+                                </span>
+                            </span>
+                            <span class="ph-list-end">
+                                <span class="ph-list-amount">@BillingDisplay.Money(item.TotalAmount)</span>
+                                <span class="ph-pill @BillingDisplay.StatusPillClass(item.Status)">@BillingDisplay.StatusLabel(item.Status)</span>
+                            </span>
+                            <svg class="ph-list-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+                        </a>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    @if (_view.Upcoming.Count > 0)
+    {
+        <section class="ph-stack-section" aria-labelledby="vao-fechar">
+            <h3 id="vao-fechar" class="ph-section-title">Ainda vão fechar neste mês</h3>
+            <ul class="ph-list">
+                @foreach (var item in _view.Upcoming)
+                {
+                    <li>
+                        <a href="/personal/alunos/@item.PersonalStudentId" class="ph-list-item ph-list-item-dashed">
+                            <span class="ph-list-text">
+                                <span class="ph-list-title">@item.StudentName</span>
+                                <span class="ph-list-subtitle">Vence dia @item.ClosingDate.Day · @Plural(item.LessonCount, "aula confirmada", "aulas confirmadas")</span>
+                            </span>
+                            <span class="ph-list-amount ph-text-muted">@BillingDisplay.Money(item.PreviewTotal)</span>
+                            <svg class="ph-list-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+                        </a>
+                    </li>
+                }
+            </ul>
+            <p class="ph-caption">Prévia com as aulas confirmadas até agora. O valor final sai no vencimento.</p>
+        </section>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "mes")]
+    private string? Mes { get; set; }
+
+    private PersonalBillingView? _view;
+    private DateOnly _today;
+    private DateOnly _currentMonth;
+    private DateOnly _month;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _today = SaoPaulo.ToLocalDate(Clock.GetUtcNow().UtcDateTime);
+        _currentMonth = new DateOnly(_today.Year, _today.Month, 1);
+
+        // Mês inválido ou no futuro cai no mês atual: demonstrativo só é emitido no vencimento.
+        _month = DateOnly.TryParseExact(Mes, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out var month)
+                 && month.Year >= 2000 && month <= _currentMonth
+            ? month
+            : _currentMonth;
+
+        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        _view = await Query.GetAsync(userId, _month, HttpContext.RequestAborted);
+    }
+
+    private static string Href(DateOnly month) => $"/personal/financeiro?mes={month.ToString("yyyy-MM", CultureInfo.InvariantCulture)}";
+
+    private static string Plural(int count, string one, string many) => count == 1 ? $"1 {one}" : $"{count} {many}";
+}

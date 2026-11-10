@@ -1,0 +1,127 @@
+@using System.Globalization
+@using PersonalHub.Web.Domain
+@using PersonalHub.Web.Domain.Billing
+@using PersonalHub.Web.Features.Billing
+
+@* Corpo comum do demonstrativo (personal e aluno): resumo escuro, aulas cobradas e créditos. Só exibe o que foi
+   congelado na emissão; o aviso de aulas aguardando é a única informação ao vivo. *@
+
+<div class="ph-statement-total">
+    <p class="ph-statement-total-label">@(ForStudent && View.Status != BillingPeriodStatus.Paid ? "Total a pagar" : "Total")</p>
+    <p class="ph-statement-total-value">@BillingDisplay.Money(View.TotalAmount)</p>
+    <p class="ph-statement-total-detail">@TotalDetail</p>
+</div>
+
+@if (View.CarryOut > 0)
+{
+    <div class="ph-alert ph-alert-info">
+        <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+        <p>O crédito passou do valor das aulas. @BillingDisplay.Money(View.CarryOut) seguem para o próximo demonstrativo.</p>
+    </div>
+}
+
+@if (View.PendingLessons > 0)
+{
+    <div class="ph-alert ph-alert-warning">
+        <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 7v5l3 2" /></svg>
+        <div class="ph-alert-body">
+            <p><strong>@PendingTitle</strong></p>
+            <p>@PendingText</p>
+            <a href="@LessonsHref" class="ph-alert-link">@(ForStudent ? "Ver aulas para confirmar" : "Ver aulas")</a>
+        </div>
+    </div>
+}
+
+<section class="ph-section-card" aria-labelledby="aulas-cobradas">
+    <h3 id="aulas-cobradas" class="ph-section-title">Aulas cobradas</h3>
+    @if (View.Charges.Count == 0)
+    {
+        <p class="ph-note mb-0">Nenhuma aula neste demonstrativo: só créditos.</p>
+    }
+    else
+    {
+        <ul class="ph-items">
+            @foreach (var charge in View.Charges)
+            {
+                <li class="ph-item-row">
+                    <span class="ph-item-text">
+                        <a href="@LessonHref(charge.LessonId)" class="ph-item-title">@charge.Description</a>
+                        @if (charge.LateFromMonth is { } lateMonth && charge.RespondedAtUtc is { } responded)
+                        {
+                            <span class="ph-item-note">Confirmada em @BillingDisplay.DayMonth(SaoPaulo.ToLocalDate(responded)), depois do fechamento de @BillingDisplay.MonthNameLower(lateMonth)</span>
+                        }
+                    </span>
+                    <span class="ph-item-amount">@BillingDisplay.Money(charge.Amount)</span>
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@if (View.Credits.Count > 0)
+{
+    <section class="ph-section-card" aria-labelledby="creditos">
+        <h3 id="creditos" class="ph-section-title">Créditos</h3>
+        <ul class="ph-items">
+            @foreach (var credit in View.Credits)
+            {
+                <li class="ph-item-row">
+                    <span class="ph-item-text">
+                        @if (credit.LessonId is { } lessonId)
+                        {
+                            <a href="@LessonHref(lessonId)" class="ph-item-title">@credit.Description</a>
+                            @if (credit.BilledInMonth is { } billedIn)
+                            {
+                                <span class="ph-item-note">Excluída depois de cobrada em @BillingDisplay.MonthNameLower(billedIn)</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="ph-item-title">@credit.Description</span>
+                            <span class="ph-item-note">Crédito que sobrou do demonstrativo anterior</span>
+                        }
+                    </span>
+                    <span class="ph-item-amount ph-amount-success">− @BillingDisplay.Money(-credit.Amount)</span>
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+<p class="ph-caption ph-center-text">
+    Este demonstrativo não muda depois de emitido. Uma aula excluída depois disso vira crédito no próximo.
+</p>
+
+@code {
+    [Parameter, EditorRequired]
+    public StatementView View { get; set; } = default!;
+
+    [Parameter]
+    public bool ForStudent { get; set; }
+
+    /// <summary>"2 aulas × R$ 80,00 − R$ 80,00 de crédito"; com preços diferentes, só "2 aulas".</summary>
+    private string TotalDetail
+    {
+        get
+        {
+            var lessons = View.UniformPrice is { } price
+                ? $"{BillingDisplay.Lessons(View.Charges.Count)} × {BillingDisplay.Money(price)}"
+                : BillingDisplay.Lessons(View.Charges.Count);
+            return View.CreditsTotal > 0 ? $"{lessons} − {BillingDisplay.Money(View.CreditsTotal)} de crédito" : lessons;
+        }
+    }
+
+    private string PendingTitle => View.PendingLessons == 1
+        ? $"1 aula de {BillingDisplay.MonthNameLower(View.ReferenceMonth)} ainda aguarda {Waiter}"
+        : $"{View.PendingLessons} aulas de {BillingDisplay.MonthNameLower(View.ReferenceMonth)} ainda aguardam {Waiter}";
+
+    private string PendingText => View.PendingLessons == 1
+        ? "Não entrou neste demonstrativo. Se for confirmada, entra no próximo."
+        : "Não entraram neste demonstrativo. Se forem confirmadas, entram no próximo.";
+
+    private string Waiter => ForStudent ? "sua resposta" : "o aluno";
+
+    private string LessonsHref => ForStudent ? "/aluno/aulas" : $"/personal/aulas?aluno={View.PersonalStudentId}&mes={View.ReferenceMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture)}";
+
+    private string LessonHref(Guid lessonId) => ForStudent ? $"/aluno/aulas/{lessonId}" : $"/personal/aulas/{lessonId}";
+}

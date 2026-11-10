@@ -1,0 +1,101 @@
+@page "/aluno/pagamentos"
+@attribute [Authorize(Roles = AppRoles.Student)]
+@layout StudentLayout
+@using PersonalHub.Web.Domain
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Billing
+@inject StudentPaymentsQuery Query
+@inject TimeProvider Clock
+
+@* Demonstrativos do aluno em todos os vínculos (D-015): em aberto, prévia do próximo e anteriores. *@
+
+<PersonalPageHeader Title="Pagamentos" />
+
+@if (_view is null)
+{
+    return;
+}
+
+<div class="ph-detail">
+    <section class="ph-stack-section" aria-labelledby="para-pagar">
+        <h2 id="para-pagar" class="ph-section-title">Para pagar</h2>
+        @if (_view.Open.Count == 0)
+        {
+            <div class="ph-card ph-all-done" role="status">
+                <p class="ph-list-title">Tudo pago</p>
+                <p class="mb-0">Nenhum demonstrativo em aberto.</p>
+            </div>
+        }
+        else
+        {
+            <ul class="ph-list">
+                @foreach (var item in _view.Open)
+                {
+                    <li class="ph-pay-card">
+                        <div class="ph-pay-card-head">
+                            <span class="ph-list-title">@BillingDisplay.MonthName(item.ReferenceMonth) · @item.PersonalName</span>
+                            <span class="ph-pill ph-pill-pending">@BillingDisplay.StudentDueBadge(item.DueDate, _today)</span>
+                        </div>
+                        <p class="ph-pay-card-value">@BillingDisplay.Money(item.TotalAmount)</p>
+                        <p class="ph-list-subtitle mb-0">@(item.LessonCount == 1 ? "1 aula confirmada" : $"{item.LessonCount} aulas confirmadas")</p>
+                        <a href="/aluno/pagamentos/@item.Id" class="ph-btn ph-btn-outline ph-btn-block">Ver demonstrativo</a>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    @foreach (var preview in _view.Previews)
+    {
+        <section class="ph-preview-card" aria-label="Prévia de @BillingDisplay.MonthName(preview.ReferenceMonth) com @preview.PersonalName">
+            <div class="ph-pay-card-head">
+                <span class="ph-list-title">@BillingDisplay.MonthName(preview.ReferenceMonth) até agora</span>
+                <span class="ph-list-subtitle">@preview.PersonalName</span>
+            </div>
+            <p class="ph-pay-card-value ph-text-muted">@BillingDisplay.Money(preview.Total)</p>
+            <p class="ph-list-subtitle mb-0">
+                @(preview.LessonCount == 1 ? "1 aula confirmada" : $"{preview.LessonCount} aulas confirmadas") · O demonstrativo sai em @BillingDisplay.DayMonth(preview.ClosingDate).
+            </p>
+        </section>
+    }
+
+    @if (_view.Paid.Count > 0)
+    {
+        <section class="ph-stack-section" aria-labelledby="anteriores">
+            <h2 id="anteriores" class="ph-section-title">Anteriores</h2>
+            <ul class="ph-list">
+                @foreach (var item in _view.Paid)
+                {
+                    <li>
+                        <a href="/aluno/pagamentos/@item.Id" class="ph-list-item">
+                            <span class="ph-list-text">
+                                <span class="ph-list-title">@BillingDisplay.MonthYear(item.ReferenceMonth)</span>
+                                <span class="ph-list-subtitle">@item.PersonalName · @BillingDisplay.Lessons(item.LessonCount)</span>
+                            </span>
+                            <span class="ph-list-end">
+                                <span class="ph-list-amount">@BillingDisplay.Money(item.TotalAmount)</span>
+                                <span class="ph-pill ph-pill-success">Pago</span>
+                            </span>
+                            <svg class="ph-list-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+                        </a>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private StudentPaymentsView? _view;
+    private DateOnly _today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _today = SaoPaulo.ToLocalDate(Clock.GetUtcNow().UtcDateTime);
+        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        _view = await Query.GetAsync(userId, HttpContext.RequestAborted);
+    }
+}

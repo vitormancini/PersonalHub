@@ -27,6 +27,8 @@ public static class TestApp
             builder.UseSetting("Authentication:LoginRateLimit:PermitLimit", "1000");
             builder.UseSetting("Students:InviteRateLimit:PermitLimit", "1000");
             builder.UseSetting(PublicBaseUrlKey, PublicBaseUrl);
+            // O fechamento automático fica desligado: os testes chamam o job diretamente.
+            builder.UseSetting("Billing:Closing:Enabled", "false");
             foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
             {
                 builder.UseSetting(key, value);

@@ -1702,3 +1702,178 @@ fieldset.ph-field {
 .ph-center-text {
     text-align: center;
 }
+
+/* Financeiro e demonstrativos (Fase 4) */
+
+.ph-month-caption {
+    margin: 6px 0 0;
+}
+
+.ph-text-muted {
+    color: var(--ph-text-muted);
+}
+
+.ph-billing-summary {
+    gap: 14px;
+}
+
+.ph-summary-label {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ph-text-muted);
+}
+
+.ph-summary-value {
+    margin: 2px 0;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--ph-text);
+}
+
+.ph-billing-summary .ph-caption {
+    margin: 0;
+}
+
+.ph-amount-success {
+    color: var(--ph-success);
+}
+
+.ph-facts dd.ph-amount-success {
+    color: var(--ph-success);
+}
+
+.ph-list-end {
+    display: grid;
+    justify-items: end;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.ph-list-amount {
+    font-size: 15px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.ph-list-item-dashed {
+    border-style: dashed;
+    border-color: var(--ph-input-border);
+}
+
+.ph-statement-total {
+    padding: 20px;
+    color: var(--ph-on-navy);
+    background: var(--ph-navy);
+    border-radius: 16px;
+}
+
+.ph-statement-total-label {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ph-on-navy-muted);
+}
+
+.ph-statement-total-value {
+    margin: 2px 0 4px;
+    font-size: 32px;
+    font-weight: 800;
+}
+
+.ph-statement-total-detail {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ph-on-navy-soft);
+}
+
+.ph-items {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ph-item-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--ph-border);
+}
+
+.ph-item-row:first-child {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.ph-item-text {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.ph-item-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ph-text);
+}
+
+a.ph-item-title:hover {
+    color: var(--ph-primary);
+}
+
+.ph-item-note {
+    font-size: 13px;
+    color: var(--ph-text-muted);
+}
+
+.ph-item-amount {
+    font-size: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.ph-alert-link {
+    font-weight: 700;
+    color: inherit;
+}
+
+.ph-pay-card {
+    display: grid;
+    gap: 8px;
+    padding: 16px;
+    background: var(--ph-surface);
+    border: 1px solid var(--ph-border);
+    border-radius: 16px;
+}
+
+.ph-pay-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ph-pay-card-value {
+    margin: 0;
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--ph-text);
+}
+
+.ph-pay-card-value.ph-text-muted {
+    font-size: 24px;
+    color: var(--ph-text-muted);
+}
+
+.ph-preview-card {
+    display: grid;
+    gap: 6px;
+    padding: 16px;
+    background: transparent;
+    border: 1.5px dashed var(--ph-input-border);
+    border-radius: 16px;
+}
