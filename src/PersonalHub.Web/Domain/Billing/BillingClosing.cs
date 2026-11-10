@@ -79,10 +79,19 @@ public static class BillingClosing
         return latestIssuedReferenceMonth is { } latest && latest >= due ? null : due;
     }
 
-    /// <summary>Próximo fechamento que ainda vai acontecer (depois de hoje): mês de referência e dia.</summary>
-    public static (DateOnly ReferenceMonth, DateOnly ClosingDate) NextClosing(DateOnly today, int billingDueDay)
+    /// <summary>
+    /// Próximo fechamento que ainda vai acontecer (depois de hoje): mês de referência e dia. Pula meses que já têm
+    /// demonstrativo (por exemplo, depois de trocar o dia de vencimento, D-036).
+    /// </summary>
+    public static (DateOnly ReferenceMonth, DateOnly ClosingDate) NextClosing(
+        DateOnly today, int billingDueDay, DateOnly? latestIssuedReferenceMonth = null)
     {
         var reference = LatestDueReferenceMonth(today, billingDueDay).AddMonths(1);
+        if (latestIssuedReferenceMonth is { } latest && latest >= reference)
+        {
+            reference = FirstOfMonth(latest).AddMonths(1);
+        }
+
         return (reference, ClosingDate(reference, billingDueDay));
     }
 

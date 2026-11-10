@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PersonalHub.Web.Domain.Billing;
 using PersonalHub.Web.Domain.Lessons;
 using PersonalHub.Web.Domain.Students;
 using PersonalHub.Web.Infrastructure.Persistence;
@@ -19,10 +20,14 @@ public sealed record LessonDetailsView(
     string? RejectionReason,
     DateTime CreatedAtUtc,
     DateTime? DeletedAtUtc,
-    string? DeletionReason)
+    string? DeletionReason,
+    DateOnly? BilledInMonth = null)
 {
     public bool Deleted => DeletedAtUtc is not null;
     public bool CanRespond => Status == LessonStatus.Pending && !Deleted;
+
+    /// <summary>Excluída depois de cobrada: o valor volta como crédito no próximo demonstrativo (D-045).</summary>
+    public bool CreditedLater => Deleted && BilledInMonth is not null;
 }
 
 /// <summary>
@@ -44,7 +49,7 @@ public sealed class LessonDetailsQuery(AppDbContext db)
             db.PersonalProfiles,
             db.PersonalStudents.Where(s => s.StudentUserId == studentUserId), cancellationToken);
 
-    private static Task<LessonDetailsView?> Project(
+    private Task<LessonDetailsView?> Project(
         IQueryable<Lesson> lessons, IQueryable<PersonalProfile> personals, IQueryable<PersonalStudent> links,
         CancellationToken cancellationToken) =>
         lessons
@@ -52,7 +57,11 @@ public sealed class LessonDetailsQuery(AppDbContext db)
             .Join(personals, x => x.s.PersonalId, p => p.Id, (x, p) => new LessonDetailsView(
                 x.l.Id, x.l.PersonalStudentId, x.s.StudentName, p.DisplayName, x.l.OccurredAtUtc, x.l.DurationMinutes,
                 x.l.Notes, x.l.UnitPrice, x.l.Status, x.l.RespondedAtUtc, x.l.RejectionReason, x.l.CreatedAtUtc,
-                x.l.DeletedAtUtc, x.l.DeletionReason))
+                x.l.DeletedAtUtc, x.l.DeletionReason,
+                db.BillingPeriodItems
+                    .Where(i => i.LessonId == x.l.Id && i.Kind == BillingPeriodItemKind.Lesson)
+                    .Join(db.BillingPeriods, i => i.BillingPeriodId, bp => bp.Id, (i, bp) => (DateOnly?)bp.ReferenceMonth)
+                    .FirstOrDefault()))
             .AsNoTracking()
             .SingleOrDefaultAsync(cancellationToken);
 }

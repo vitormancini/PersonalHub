@@ -1733,6 +1733,12 @@ fieldset.ph-field {
 
 .ph-billing-summary .ph-caption {
     margin: 0;
+    text-align: left;
+}
+
+.ph-pill-start {
+    justify-self: start;
+    margin-top: 4px;
 }
 
 .ph-amount-success {

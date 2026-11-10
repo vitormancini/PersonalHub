@@ -79,6 +79,16 @@ public class BillingClosingTests
     }
 
     [Fact]
+    public void NextClosing_SkipsMonthsAlreadyIssued()
+    {
+        // Outubro fechou em 05/11 e o vencimento passou para o dia 20: o próximo é novembro, em 20/12 (D-036).
+        var (month, date) = BillingClosing.NextClosing(new DateOnly(2026, 11, 9), 20, October);
+
+        Assert.Equal(new DateOnly(2026, 11, 1), month);
+        Assert.Equal(new DateOnly(2026, 12, 20), date);
+    }
+
+    [Fact]
     public void CutoffUtc_IsMidnightInSaoPaulo()
     {
         Assert.Equal(new DateTime(2026, 11, 10, 3, 0, 0, DateTimeKind.Utc), BillingClosing.CutoffUtc(new DateOnly(2026, 11, 10)));

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -142,7 +143,7 @@ public sealed partial class BillingClosingJob(AppDbContext db, TimeProvider cloc
             CorrelationId = null,
             Metadata = JsonSerializer.Serialize(new
             {
-                referenceMonth = result.ReferenceMonth.ToString("yyyy-MM"),
+                referenceMonth = Iso(result.ReferenceMonth),
                 lessons = result.LessonCount,
                 credits = result.Items.Count - result.LessonCount,
                 status = period.Status.ToString()
@@ -153,7 +154,7 @@ public sealed partial class BillingClosingJob(AppDbContext db, TimeProvider cloc
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        LogIssued(logger, period.Id, personalStudentId, result.ReferenceMonth, result.LessonCount, period.Status);
+        LogIssued(logger, period.Id, personalStudentId, Iso(result.ReferenceMonth), result.LessonCount, period.Status);
         return CloseLinkOutcome.Issued;
     }
 
@@ -196,28 +197,28 @@ public sealed partial class BillingClosingJob(AppDbContext db, TimeProvider cloc
             catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
             {
                 // Outra execução gravou primeiro (sem o advisory lock, por exemplo): o demonstrativo já existe.
-                LogAlreadyClosed(logger, link.Id, month);
+                LogAlreadyClosed(logger, link.Id, Iso(month));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 failed++;
-                LogFailed(logger, ex, link.Id, month);
+                LogFailed(logger, ex, link.Id, Iso(month));
             }
         }
 
         db.ChangeTracker.Clear();
-        LogRun(logger, today, due, issued, empty, failed);
+        LogRun(logger, today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), due, issued, empty, failed);
         return new ClosingRunResult(true, due, issued, empty, failed);
     }
 
     [LoggerMessage(EventId = 5000, Level = LogLevel.Information,
         Message = "Fechamento de {Today}: {Due} vínculos devidos, {Issued} demonstrativos emitidos, {Empty} sem cobrança, {Failed} falhas")]
-    private static partial void LogRun(ILogger logger, DateOnly today, int due, int issued, int empty, int failed);
+    private static partial void LogRun(ILogger logger, string today, int due, int issued, int empty, int failed);
 
     [LoggerMessage(EventId = 5001, Level = LogLevel.Information,
         Message = "Demonstrativo {BillingPeriodId} emitido para o vínculo {PersonalStudentId}, mês {ReferenceMonth}: {Lessons} aulas, situação {Status}")]
     private static partial void LogIssued(
-        ILogger logger, Guid billingPeriodId, Guid personalStudentId, DateOnly referenceMonth, int lessons, BillingPeriodStatus status);
+        ILogger logger, Guid billingPeriodId, Guid personalStudentId, string referenceMonth, int lessons, BillingPeriodStatus status);
 
     [LoggerMessage(EventId = 5002, Level = LogLevel.Information,
         Message = "Fechamento ignorado: outra execução está em andamento")]
@@ -225,9 +226,11 @@ public sealed partial class BillingClosingJob(AppDbContext db, TimeProvider cloc
 
     [LoggerMessage(EventId = 5003, Level = LogLevel.Information,
         Message = "Vínculo {PersonalStudentId}, mês {ReferenceMonth}: já fechado por outra execução")]
-    private static partial void LogAlreadyClosed(ILogger logger, Guid personalStudentId, DateOnly referenceMonth);
+    private static partial void LogAlreadyClosed(ILogger logger, Guid personalStudentId, string referenceMonth);
 
     [LoggerMessage(EventId = 5004, Level = LogLevel.Error,
         Message = "Falha ao fechar o vínculo {PersonalStudentId}, mês {ReferenceMonth}")]
-    private static partial void LogFailed(ILogger logger, Exception exception, Guid personalStudentId, DateOnly referenceMonth);
+    private static partial void LogFailed(ILogger logger, Exception exception, Guid personalStudentId, string referenceMonth);
+
+    private static string Iso(DateOnly month) => month.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 }

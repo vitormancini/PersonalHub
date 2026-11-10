@@ -71,11 +71,9 @@
                             <span class="ph-list-text">
                                 <span class="ph-list-title">@BillingDisplay.MonthYear(item.ReferenceMonth)</span>
                                 <span class="ph-list-subtitle">@item.PersonalName · @BillingDisplay.Lessons(item.LessonCount)</span>
+                                <span class="ph-pill ph-pill-success ph-pill-start">Pago</span>
                             </span>
-                            <span class="ph-list-end">
-                                <span class="ph-list-amount">@BillingDisplay.Money(item.TotalAmount)</span>
-                                <span class="ph-pill ph-pill-success">Pago</span>
-                            </span>
+                            <span class="ph-list-amount">@BillingDisplay.Money(item.TotalAmount)</span>
                             <svg class="ph-list-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
                         </a>
                     </li>

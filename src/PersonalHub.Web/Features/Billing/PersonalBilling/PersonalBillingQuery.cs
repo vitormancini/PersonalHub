@@ -65,14 +65,13 @@ public sealed class PersonalBillingQuery(AppDbContext db, TimeProvider clock)
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        // Fecha ainda neste mês quem tem o vencimento depois de hoje.
-        var closingThisMonth = links
-            .Where(l => BillingClosing.NextClosing(today, l.BillingDueDay).ClosingDate is var d
-                        && d.Year == today.Year && d.Month == today.Month)
-            .ToList();
-
         var previews = await db.NextClosingPreviewsAsync(
-            closingThisMonth.Select(l => new PreviewLink(l.Id, l.BillingDueDay)).ToList(), nowUtc, cancellationToken);
+            links.Select(l => new PreviewLink(l.Id, l.BillingDueDay)).ToList(), nowUtc, cancellationToken);
+
+        // Fecha ainda neste mês quem tem o próximo vencimento (ainda não emitido) depois de hoje e dentro do mês.
+        var closingThisMonth = links
+            .Where(l => previews[l.Id].ClosingDate is var d && d.Year == today.Year && d.Month == today.Month)
+            .ToList();
 
         return closingThisMonth
             // Inativo só aparece se ainda tem algo a fechar (D-046).

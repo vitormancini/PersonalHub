@@ -141,6 +141,11 @@ public sealed class BillingPagesTests(DatabaseFixture fixture) : IAsyncLifetime
         Assert.Contains("− R$ 80,00", html);
         Assert.Contains("2 aulas − R$ 80,00 de crédito", html);   // preços diferentes: só "N aulas"
         Assert.Equal(90m, november.TotalAmount);
+
+        // O detalhe da aula excluída avisa que ela vira crédito, para o personal e para o aluno.
+        const string creditNote = "Foi cobrada no demonstrativo de outubro. O valor volta como crédito no próximo demonstrativo.";
+        Assert.Contains(creditNote, await PageAsync(_personal.Client, $"/personal/aulas/{billed}"));
+        Assert.Contains(creditNote, await PageAsync(_student.Client, $"/aluno/aulas/{billed}"));
     }
 
     [Fact]
@@ -206,6 +211,22 @@ public sealed class BillingPagesTests(DatabaseFixture fixture) : IAsyncLifetime
         Assert.Contains("Anteriores", html);
         Assert.Contains("Setembro de 2026", html);
         Assert.Contains("Paula Reis", html);
+    }
+
+    [Fact]
+    public async Task Previews_SkipAMonthAlreadyIssued_AfterTheDueDayChanged()
+    {
+        // Outubro fechou no dia 10; o vencimento passou para o dia 20. Não pode aparecer "Outubro" de novo.
+        await _factory.SetBillingAsync(_linkId, dueDay: 20);
+        await _factory.AddApprovedLessonAsync(_linkId, Sp(2026, 11, 3));
+
+        var student = await PageAsync(_student.Client, "/aluno/pagamentos");
+        Assert.Contains("Novembro até agora", student);
+        Assert.Contains("1 aula confirmada · O demonstrativo sai em 20/12.", student);
+        Assert.DoesNotContain("Outubro até agora", student);
+
+        var personal = await PageAsync(_personal.Client, "/personal/financeiro");
+        Assert.DoesNotContain("Ainda vão fechar", personal);
     }
 
     [Fact]

@@ -43,7 +43,14 @@
                 {
                     <p class="ph-reason">Motivo: @_view.DeletionReason</p>
                 }
-                <p>Esta aula não será cobrada.</p>
+                @if (_view.CreditedLater)
+                {
+                    <p>Foi cobrada no demonstrativo de @Billing.BillingDisplay.MonthNameLower(_view.BilledInMonth!.Value). O valor volta como crédito no próximo demonstrativo.</p>
+                }
+                else
+                {
+                    <p>Esta aula não será cobrada.</p>
+                }
             </div>
         </div>
     }
