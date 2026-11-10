@@ -350,6 +350,10 @@ namespace PersonalHub.Web.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("DecidedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -382,11 +386,16 @@ namespace PersonalHub.Web.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ReportedByUserId");
 
+                    b.HasIndex("BillingPeriodId", "ReportedAtUtc")
+                        .HasDatabaseName("IX_Payment_BillingPeriodId_ReportedAtUtc");
+
                     b.ToTable("Payment", null, t =>
                         {
                             t.HasCheckConstraint("CK_Payment_Amount", "\"Amount\" > 0");
 
                             t.HasCheckConstraint("CK_Payment_Decision", "(\"DecidedAtUtc\" IS NULL) = (\"DecidedByUserId\" IS NULL) AND (\"Status\" = 'Reported') = (\"DecidedAtUtc\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_Payment_DecisionNote", "\"DecisionNote\" IS NULL OR \"Status\" = 'Rejected'");
 
                             t.HasCheckConstraint("CK_Payment_Status", "\"Status\" IN ('Reported', 'Confirmed', 'Rejected')");
                         });

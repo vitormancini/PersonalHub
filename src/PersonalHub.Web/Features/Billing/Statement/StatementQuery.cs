@@ -13,6 +13,11 @@ public sealed record StatementCharge(
 /// <summary>Crédito: de aula excluída depois de cobrada (<see cref="BilledInMonth"/>) ou saldo do mês anterior.</summary>
 public sealed record StatementCredit(Guid? LessonId, string Description, decimal Amount, DateOnly? BilledInMonth);
 
+/// <summary>Um pagamento do histórico do demonstrativo (D-053).</summary>
+public sealed record PaymentEntry(
+    Guid Id, PaymentStatus Status, DateTime ReportedAtUtc, DateTime? DecidedAtUtc, string? Notes, string? DecisionNote,
+    bool RecordedByPersonal);
+
 public sealed record StatementView(
     Guid Id,
     Guid PersonalStudentId,
@@ -27,8 +32,19 @@ public sealed record StatementView(
     BillingPeriodStatus Status,
     IReadOnlyList<StatementCharge> Charges,
     IReadOnlyList<StatementCredit> Credits,
-    int PendingLessons)
+    int PendingLessons,
+    DateTime? PaidAtUtc,
+    IReadOnlyList<PaymentEntry> Payments)
 {
+    /// <summary>Pagamento informado aguardando o personal, se houver.</summary>
+    public PaymentEntry? Reported => Payments.LastOrDefault(p => p.Status == PaymentStatus.Reported);
+
+    /// <summary>
+    /// A última decisão foi "Não recebi" e o aluno ainda não informou de novo: a tela do aluno mostra o aviso vermelho.
+    /// </summary>
+    public PaymentEntry? LastRejection =>
+        Status == BillingPeriodStatus.Issued && Payments.LastOrDefault() is { Status: PaymentStatus.Rejected } last ? last : null;
+
     public decimal ChargesTotal => Charges.Sum(c => c.Amount);
 
     public decimal CreditsTotal => -Credits.Sum(c => c.Amount);
@@ -88,7 +104,8 @@ public sealed class StatementQuery(AppDbContext db)
                 x.p.DueDate,
                 x.p.IssuedAtUtc,
                 x.p.TotalAmount,
-                x.p.Status
+                x.p.Status,
+                x.p.PaidAtUtc
             })
             .AsNoTracking()
             .SingleOrDefaultAsync(cancellationToken);
@@ -136,9 +153,17 @@ public sealed class StatementQuery(AppDbContext db)
             && l.Status == LessonStatus.Pending && l.DeletedAtUtc == null
             && l.OccurredAtUtc >= startUtc && l.OccurredAtUtc < endUtc, cancellationToken);
 
+        var payments = await db.Payments
+            .Where(p => p.BillingPeriodId == head.Id)
+            .OrderBy(p => p.ReportedAtUtc).ThenBy(p => p.CreatedAtUtc)
+            .Select(p => new PaymentEntry(p.Id, p.Status, p.ReportedAtUtc, p.DecidedAtUtc, p.Notes, p.DecisionNote,
+                p.DecidedByUserId == p.ReportedByUserId))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
         return new StatementView(head.Id, head.PersonalStudentId, head.StudentName, head.PersonalName, head.ReferenceMonth,
             head.PeriodStart, head.PeriodEnd, head.DueDate, head.IssuedAtUtc, head.TotalAmount, head.Status, charges, credits,
-            pending);
+            pending, head.PaidAtUtc, payments);
     }
 
     private static DateOnly FirstOfMonth(DateOnly day) => new(day.Year, day.Month, 1);

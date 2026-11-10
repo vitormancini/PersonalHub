@@ -129,6 +129,21 @@ public class ConstraintTests(DatabaseFixture fixture)
             () => context.SaveChangesAsync());
     }
 
+    [Fact]
+    public async Task Payment_RejectsDecisionNoteOutsideRejection()
+    {
+        await using var context = fixture.CreateContext();
+        var link = await context.AddPersonalStudentAsync();
+        var student = await context.AddUserAsync();
+        var period = TestData.NewBillingPeriod(link.Id, new DateOnly(2027, 2, 1));
+        context.BillingPeriods.Add(period);
+        var payment = ReportedPayment(period, student.Id);
+        payment.DecisionNote = "Mensagem sem recusa";
+        context.Payments.Add(payment);
+
+        await DbAssert.ViolatesAsync(CheckViolation, "CK_Payment_DecisionNote", () => context.SaveChangesAsync());
+    }
+
     private static BillingPeriodItem LessonCharge(Guid billingPeriodId, Guid lessonId) => new()
     {
         Id = Guid.NewGuid(),

@@ -5,17 +5,24 @@ using PersonalHub.Web.Features.Students;
 
 namespace PersonalHub.Web.Features.Billing;
 
-/// <summary>Rótulos (D-048) e formatos das telas de demonstrativo.</summary>
+/// <summary>Rótulos (D-048, D-049) e formatos das telas de demonstrativo e pagamento.</summary>
 public static class BillingDisplay
 {
     private static CultureInfo PtBr => StudentDisplay.PtBr;
 
-    /// <summary>Pagamento informado (Fase 5) ainda aparece como aguardando até o personal confirmar.</summary>
-    public static string StatusLabel(BillingPeriodStatus status) =>
-        status == BillingPeriodStatus.Paid ? "Pago" : "Aguardando pagamento";
+    public static string StatusLabel(BillingPeriodStatus status) => status switch
+    {
+        BillingPeriodStatus.Paid => "Pago",
+        BillingPeriodStatus.PaymentReported => "Pagamento informado",
+        _ => "Aguardando pagamento"
+    };
 
-    public static string StatusPillClass(BillingPeriodStatus status) =>
-        status == BillingPeriodStatus.Paid ? "ph-pill-success" : "ph-pill-pending";
+    public static string StatusPillClass(BillingPeriodStatus status) => status switch
+    {
+        BillingPeriodStatus.Paid => "ph-pill-success",
+        BillingPeriodStatus.PaymentReported => "ph-pill-info",
+        _ => "ph-pill-pending"
+    };
 
     /// <summary>"Outubro".</summary>
     public static string MonthName(DateOnly month) => Capitalize(month.ToString("MMMM", PtBr));
@@ -29,6 +36,12 @@ public static class BillingDisplay
     public static string DayMonth(DateOnly day) => day.ToString("dd/MM", CultureInfo.InvariantCulture);
 
     public static string Date(DateOnly day) => day.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    /// <summary>"05/11 às 14:30" (horário de Brasília).</summary>
+    public static string DayMonthTime(DateTime utc) => LessonDisplay.DayMonthTime(utc);
+
+    /// <summary>"05/11" (data de Brasília).</summary>
+    public static string DayMonth(DateTime utc) => LessonDisplay.DayMonth(utc);
 
     public static string Lessons(int count) => count == 1 ? "1 aula" : $"{count} aulas";
 

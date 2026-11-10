@@ -17,11 +17,14 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             t.HasCheckConstraint("CK_Payment_Amount", "\"Amount\" > 0");
             t.HasCheckConstraint("CK_Payment_Decision",
                 "(\"DecidedAtUtc\" IS NULL) = (\"DecidedByUserId\" IS NULL) AND (\"Status\" = 'Reported') = (\"DecidedAtUtc\" IS NULL)");
+            // A mensagem do personal só existe na recusa (D-051).
+            t.HasCheckConstraint("CK_Payment_DecisionNote", "\"DecisionNote\" IS NULL OR \"Status\" = 'Rejected'");
         });
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Amount).HasPrecision(12, 2);
-        builder.Property(x => x.Notes).HasMaxLength(500);
+        builder.Property(x => x.Notes).HasMaxLength(Payment.TextMaxLength);
+        builder.Property(x => x.DecisionNote).HasMaxLength(Payment.TextMaxLength);
 
         // No máximo um pagamento ativo (informado ou confirmado) por período (D-024).
         builder.HasIndex(x => x.BillingPeriodId)
@@ -32,6 +35,9 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.HasOne<BillingPeriod>().WithMany().HasForeignKey(x => x.BillingPeriodId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ReportedByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.DecidedByUserId).OnDelete(DeleteBehavior.Restrict);
+
+        // Histórico do demonstrativo (D-053).
+        builder.HasIndex(x => new { x.BillingPeriodId, x.ReportedAtUtc }).HasDatabaseName("IX_Payment_BillingPeriodId_ReportedAtUtc");
 
         builder.HasXminConcurrencyToken();
     }

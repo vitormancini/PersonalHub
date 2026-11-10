@@ -252,7 +252,10 @@ public sealed class BillingPagesTests(DatabaseFixture fixture) : IAsyncLifetime
         Assert.Contains("R$ 160,00", html);
         Assert.Contains("1 aula de outubro ainda aguarda sua resposta", html);
         Assert.Contains("href=\"/aluno/aulas\"", html);
-        Assert.Contains("Pague direto ao Carlos Lima, como vocês combinaram.", html);
+        Assert.Contains("Pague direto ao Carlos Lima e avise aqui. Ele confirma quando receber.", html);
+        Assert.Contains($"href=\"/aluno/pagamentos/{_periodId}/informar\"", html);
+        Assert.Contains("Já paguei", html);
+        Assert.DoesNotContain("chega na próxima etapa", html);
     }
 
     [Fact]

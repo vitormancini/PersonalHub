@@ -2,14 +2,25 @@
 @attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
 @layout PersonalLayout
 @using System.Globalization
+@using PersonalHub.Web.Domain
+@using PersonalHub.Web.Domain.Billing
 @using PersonalHub.Web.Features.Authentication
 @using PersonalHub.Web.Features.Billing
+@using PersonalHub.Web.Features.Billing.Payments
+@using PersonalHub.Web.Features.Students.CreateStudent
 @inject StatementQuery Query
+@inject PaymentHandler Handler
 @inject NavigationManager Navigation
+@inject TimeProvider Clock
 
-@* Somente leitura: o demonstrativo emitido nunca muda (D-023). Marcar como pago chega na Fase 5. *@
+@* Itens e total nunca mudam depois de emitido (D-023); só a situação do pagamento avança (D-050 a D-053). O formulário
+   "confirmar" fica sempre na página (vazio): um POST de outra aba chega ao handler, que responde com a situação atual. *@
 
 <PersonalPageHeader Title="Demonstrativo" BackHref="@BackHref" BackLabel="Voltar para o financeiro" />
+
+<form id="confirmar-recebimento" method="post" @formname="confirmar" @onsubmit="ConfirmAsync" data-ph-busy-form>
+    <AntiforgeryToken />
+</form>
 
 @if (_view is null)
 {
@@ -17,6 +28,8 @@
 }
 
 <div class="ph-detail">
+    <PaymentNotice Code="@Aviso" />
+
     <div class="ph-lesson-head">
         <span class="ph-pill @BillingDisplay.StatusPillClass(_view.Status)">@BillingDisplay.StatusLabel(_view.Status)</span>
         <h2 class="ph-profile-name">@_view.StudentName · @BillingDisplay.MonthYear(_view.ReferenceMonth)</h2>
@@ -25,7 +38,48 @@
         </p>
     </div>
 
+    @if (_view.Reported is { } reported)
+    {
+        <section class="ph-confirm-pay-card" aria-labelledby="pagamento-informado">
+            <span>
+                <h3 id="pagamento-informado" class="ph-list-title mb-0">@FirstName informou o pagamento</h3>
+                <span class="ph-list-subtitle">@BillingDisplay.DayMonthTime(reported.ReportedAtUtc) · @BillingDisplay.Money(_view.TotalAmount)</span>
+            </span>
+            @if (reported.Notes is not null)
+            {
+                <p class="ph-quote">"@reported.Notes"</p>
+            }
+            <p class="ph-note mb-0">Confira na sua conta antes de confirmar. Depois de confirmado, o demonstrativo fica como pago.</p>
+            <div class="ph-grid-2">
+                <a href="/personal/financeiro/@_view.Id/nao-recebi" class="ph-btn ph-btn-danger-outline">Não recebi</a>
+                <button type="submit" form="confirmar-recebimento" class="ph-btn ph-btn-primary" data-ph-busy-text="Confirmando…">
+                    <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    <span class="ph-btn-text">Confirmar recebimento</span>
+                </button>
+            </div>
+        </section>
+    }
+    else if (_view.Status == BillingPeriodStatus.Issued)
+    {
+        <section class="ph-section-card ph-stack-tight" aria-label="Recebimento">
+            <p class="mb-0">@FirstName ainda não informou o pagamento. Se pagou em dinheiro ou você já viu o Pix, registre o recebimento aqui.</p>
+            <a href="/personal/financeiro/@_view.Id/registrar" class="ph-btn ph-btn-outline ph-btn-block">Registrar recebimento</a>
+        </section>
+    }
+    else if (_view is { TotalAmount: > 0, PaidAtUtc: { } paidAt })
+    {
+        <div class="ph-alert ph-alert-success">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="m8 12 3 3 5-6" /></svg>
+            <p>Você confirmou o recebimento em @BillingDisplay.DayMonth(paidAt). @FirstName vê o demonstrativo como pago.</p>
+        </div>
+    }
+
     <StatementBody View="_view" />
+
+    @if (_view.TotalAmount > 0)
+    {
+        <PaymentHistory View="_view" Today="_today" />
+    }
 
     <div class="ph-grid-2">
         <a href="/personal/alunos/@_view.PersonalStudentId" class="ph-btn ph-btn-outline">Ver aluno</a>
@@ -40,7 +94,15 @@
     [Parameter]
     public Guid BillingPeriodId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "aviso")]
+    private string? Aviso { get; set; }
+
     private StatementView? _view;
+    private DateOnly _today;
+
+    private string FirstName => WhatsAppInvite.FirstName(_view!.StudentName);
+
+    private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;
 
     private string BackHref => _view is null
         ? "/personal/financeiro"
@@ -48,12 +110,25 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
-        _view = await Query.ForPersonalAsync(userId, BillingPeriodId, HttpContext.RequestAborted);
-        if (_view is null)
+        _today = SaoPaulo.ToLocalDate(Clock.GetUtcNow().UtcDateTime);
+        _view = await Query.ForPersonalAsync(UserId, BillingPeriodId, HttpContext.RequestAborted);
+        if (_view is null && !HttpMethods.IsPost(HttpContext.Request.Method))
         {
             // Demonstrativo de outro personal ou inexistente: mesma resposta, sem revelar qual dos dois.
             Navigation.NotFound();
         }
+    }
+
+    private async Task ConfirmAsync()
+    {
+        var outcome = await Handler.ConfirmAsync(UserId, BillingPeriodId, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+        if (outcome == PaymentOutcome.NotFound)
+        {
+            _view = null;
+            Navigation.NotFound();
+            return;
+        }
+
+        Navigation.NavigateTo($"/personal/financeiro/{BillingPeriodId}?aviso={PaymentNotice.CodeFor(outcome, PaymentNotice.Confirmed)}");
     }
 }

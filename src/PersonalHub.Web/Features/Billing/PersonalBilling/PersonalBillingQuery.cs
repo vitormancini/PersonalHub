@@ -15,9 +15,14 @@ public sealed record PersonalStatementRow(
 /// <summary>Vínculo cujo fechamento ainda vai acontecer no mês corrente, com a prévia.</summary>
 public sealed record UpcomingClosingRow(Guid PersonalStudentId, string StudentName, DateOnly ClosingDate, int LessonCount, decimal PreviewTotal);
 
+/// <summary>Pagamento informado pelo aluno aguardando o personal (de qualquer mês).</summary>
+public sealed record PaymentToConfirmRow(
+    Guid BillingPeriodId, string StudentName, DateOnly ReferenceMonth, DateTime ReportedAtUtc, decimal TotalAmount, string? Notes);
+
 public sealed record PersonalBillingView(
     IReadOnlyList<PersonalStatementRow> Statements,
-    IReadOnlyList<UpcomingClosingRow> Upcoming)
+    IReadOnlyList<UpcomingClosingRow> Upcoming,
+    IReadOnlyList<PaymentToConfirmRow> ToConfirm)
 {
     public decimal Billed => Statements.Sum(s => s.TotalAmount);
 
@@ -54,8 +59,28 @@ public sealed class PersonalBillingQuery(AppDbContext db, TimeProvider clock)
             ? await UpcomingAsync(personalUserId, today, nowUtc, cancellationToken)
             : [];
 
-        return new PersonalBillingView(statements, upcoming);
+        return new PersonalBillingView(statements, upcoming, await ToConfirmAsync(personalUserId, cancellationToken));
     }
+
+    /// <summary>Quantos pagamentos informados aguardam o personal (início).</summary>
+    public Task<int> ToConfirmCountAsync(Guid personalUserId, CancellationToken cancellationToken) =>
+        db.BillingPeriods
+            .Where(p => p.Status == BillingPeriodStatus.PaymentReported)
+            .Join(OwnedLinks(personalUserId), p => p.PersonalStudentId, s => s.Id, (p, s) => p.Id)
+            .CountAsync(cancellationToken);
+
+    /// <summary>Pagamentos informados de todos os meses, do aviso mais antigo para o mais novo.</summary>
+    private Task<List<PaymentToConfirmRow>> ToConfirmAsync(Guid personalUserId, CancellationToken cancellationToken) =>
+        db.BillingPeriods
+            .Where(p => p.Status == BillingPeriodStatus.PaymentReported)
+            .Join(OwnedLinks(personalUserId), p => p.PersonalStudentId, s => s.Id, (p, s) => new { p, s.StudentName })
+            .Join(db.Payments.Where(x => x.Status == PaymentStatus.Reported), x => x.p.Id, pay => pay.BillingPeriodId,
+                (x, pay) => new { x.p, x.StudentName, pay })
+            .OrderBy(x => x.pay.ReportedAtUtc)
+            .Select(x => new PaymentToConfirmRow(x.p.Id, x.StudentName, x.p.ReferenceMonth, x.pay.ReportedAtUtc, x.p.TotalAmount,
+                x.pay.Notes))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
 
     private async Task<List<UpcomingClosingRow>> UpcomingAsync(
         Guid personalUserId, DateOnly today, DateTime nowUtc, CancellationToken cancellationToken)

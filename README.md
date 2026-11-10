@@ -123,6 +123,16 @@ dotnet run --project src/PersonalHub.Web -- close-billing --date 2026-12-10
 
 - Saída: código 0 (ok), 1 (falha em algum vínculo, ou outra execução em andamento) ou 2 (uso incorreto).
 
+## Pagamentos informados
+
+O aluno paga direto ao personal (Pix, dinheiro…) e avisa pelo app; o personal confere e confirma (D-049 a D-054). Sempre o valor total do demonstrativo, sem parcial (D-024).
+
+- Aluno: **Já paguei** no demonstrativo (`/aluno/pagamentos/{id}`) → `/informar`, com observação opcional. O demonstrativo fica "Pagamento informado".
+- Personal: **Pagamentos para confirmar** no topo do Financeiro (todos os meses) com **Confirmar** (direto) e **Não recebi** (`/personal/financeiro/{id}/nao-recebi`, mensagem opcional que o aluno vê). Recusado, o demonstrativo volta a "Aguardando pagamento" e o aluno pode informar de novo.
+- Sem aviso do aluno (ex.: dinheiro), o personal usa **Registrar recebimento** no demonstrativo (`/registrar`).
+- Confirmação e registro são definitivos. Cada transição trava o demonstrativo (`SELECT ... FOR UPDATE`) e grava `AuditLog` (`PaymentReported`, `PaymentConfirmed`, `PaymentRejected`, `PaymentRecorded`) sem os textos livres.
+- Avisos por WhatsApp desses eventos ficam para a Fase 6 (D-054).
+
 ## Autorização
 
 Toda rota exige login por padrão (`FallbackPolicy`). Uma página nova sem atributo fica protegida; as públicas precisam de `[AllowAnonymous]` explícito: `/`, `/entrar`, `/convite/{token}`, `/termos`, `/privacidade`, `/Error`, `/not-found`, `/health`, `POST /sair` e os arquivos estáticos. O teste `AuthorizationPolicyTests` falha se uma rota pública nova aparecer fora dessa lista.

@@ -46,10 +46,10 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
   Critério: cálculo reproduzível, rastreável e coberto por testes.
 
 ## Fase 5 — Pagamentos informados
-- [ ] Aluno informa pagamento.
-- [ ] Personal recebe item pendente de confirmação.
-- [ ] Personal confirma recebimento.
-- [ ] Histórico de pagamentos.
+- [x] Aluno informa pagamento (2026-11-10): valor total, observação opcional, informar de novo após recusa (D-049).
+- [x] Personal recebe item pendente de confirmação (2026-11-10): "Pagamentos para confirmar" no Financeiro e contador no Início.
+- [x] Personal confirma recebimento (2026-11-10): pela lista ou pelo detalhe; "Não recebi" com mensagem; registro direto (D-050 a D-052).
+- [x] Histórico de pagamentos (2026-11-10): linha do tempo no demonstrativo do aluno e do personal (D-053).
   Critério: período só muda para pago após confirmação do personal.
 
 ## Fase 6 — WhatsApp
@@ -61,6 +61,7 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
 - [ ] Notificar aluno sobre exclusão relevante.
 - [ ] Notificar aluno no vencimento com demonstrativo.
 - [ ] Notificar personal quando aluno informar pagamento.
+- [ ] Notificar aluno quando o personal confirmar ou recusar ("Não recebi") o pagamento (D-054).
 - [ ] Implementar webhooks/links seguros se necessários.
 - [ ] Exigir código de uso único, enviado por WhatsApp ao celular do aluno, no aceite do convite (D-033).
   Critério: falhas, retries, duplicidade e auditoria testados.

@@ -1,0 +1,106 @@
+@page "/personal/financeiro/{BillingPeriodId:guid}/nao-recebi"
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
+@layout PersonalLayout
+@using PersonalHub.Web.Domain.Billing
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Billing
+@using PersonalHub.Web.Features.Billing.Statement
+@using PersonalHub.Web.Features.Students.CreateStudent
+@inject StatementQuery Query
+@inject PaymentHandler Handler
+@inject NavigationManager Navigation
+
+@* "Não recebi" (D-051): o pagamento fica recusado, o demonstrativo volta a aguardar pagamento e o aluno vê a
+   mensagem. Página própria: funciona sem JavaScript e o voltar do celular cancela. *@
+
+<PersonalPageHeader Title="Não recebi" BackHref="@DetailsHref" BackLabel="Voltar para o demonstrativo" />
+
+<form method="post" @formname="nao-recebi" @onsubmit="SubmitAsync" class="ph-confirm" novalidate data-ph-busy-form
+      aria-labelledby="nao-recebi-titulo">
+    <AntiforgeryToken />
+    @if (_view is not null)
+    {
+        <h2 id="nao-recebi-titulo" class="ph-confirm-title">
+            Você não recebeu os @BillingDisplay.Money(_view.TotalAmount) de @FirstName?
+        </h2>
+        <p class="ph-confirm-text">
+            O demonstrativo volta para "Aguardando pagamento" e @FirstName pode informar de novo. A sua mensagem aparece para @FirstName.
+        </p>
+
+        <div class="ph-field">
+            <label for="nao-recebi-mensagem" class="ph-label">Mensagem <span class="ph-optional">(opcional)</span></label>
+            <textarea id="nao-recebi-mensagem" name="mensagem" class="ph-input ph-textarea @(_error is null ? null : "invalid")" rows="3"
+                      maxlength="@Payment.TextMaxLength" placeholder="Ex.: Não caiu na minha conta ainda"
+                      aria-invalid="@(_error is null ? null : "true")" aria-describedby="nao-recebi-mensagem-error">@Mensagem</textarea>
+            @if (_error is not null)
+            {
+                <span id="nao-recebi-mensagem-error" class="ph-field-error">@_error</span>
+            }
+        </div>
+
+        <div class="ph-stack-tight">
+            <button type="submit" class="ph-btn ph-btn-danger ph-btn-block" data-ph-busy-text="Enviando…">
+                <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span class="ph-btn-text">Não recebi</span>
+            </button>
+            <a href="@DetailsHref" class="ph-btn ph-btn-outline ph-btn-block">Cancelar</a>
+        </div>
+    }
+</form>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public Guid BillingPeriodId { get; set; }
+
+    [SupplyParameterFromForm(FormName = "nao-recebi", Name = "mensagem")]
+    private string? Mensagem { get; set; }
+
+    private StatementView? _view;
+    private string? _error;
+
+    private string DetailsHref => $"/personal/financeiro/{BillingPeriodId}";
+
+    private string FirstName => WhatsAppInvite.FirstName(_view!.StudentName);
+
+    private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _view = await Query.ForPersonalAsync(UserId, BillingPeriodId, HttpContext.RequestAborted);
+        if (HttpMethods.IsPost(HttpContext.Request.Method))
+        {
+            return;
+        }
+
+        if (_view is null)
+        {
+            Navigation.NotFound();
+        }
+        else if (_view.Status != BillingPeriodStatus.PaymentReported)
+        {
+            // Nada aguardando confirmação (outra aba já decidiu): mostra o demonstrativo como está.
+            Navigation.NavigateTo(DetailsHref);
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        var outcome = await Handler.RejectAsync(UserId, BillingPeriodId, Mensagem, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+        switch (outcome)
+        {
+            case PaymentOutcome.TextTooLong:
+                _error = $"A mensagem pode ter até {Payment.TextMaxLength} caracteres.";
+                return;
+            case PaymentOutcome.NotFound:
+                _view = null;
+                Navigation.NotFound();
+                return;
+            default:
+                Navigation.NavigateTo($"{DetailsHref}?aviso={PaymentNotice.CodeFor(outcome, PaymentNotice.Rejected)}");
+                return;
+        }
+    }
+}

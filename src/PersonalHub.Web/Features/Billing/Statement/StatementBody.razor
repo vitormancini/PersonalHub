@@ -7,7 +7,7 @@
    congelado na emissão; o aviso de aulas aguardando é a única informação ao vivo. *@
 
 <div class="ph-statement-total">
-    <p class="ph-statement-total-label">@(ForStudent && View.Status != BillingPeriodStatus.Paid ? "Total a pagar" : "Total")</p>
+    <p class="ph-statement-total-label">@TotalLabel</p>
     <p class="ph-statement-total-value">@BillingDisplay.Money(View.TotalAmount)</p>
     <p class="ph-statement-total-detail">@TotalDetail</p>
 </div>
@@ -98,6 +98,11 @@
 
     [Parameter]
     public bool ForStudent { get; set; }
+
+    /// <summary>O aluno vê "Total a pagar" até a confirmação e "Total pago" depois (D-050).</summary>
+    private string TotalLabel => !ForStudent || View.TotalAmount == 0
+        ? "Total"
+        : View.Status == BillingPeriodStatus.Paid ? "Total pago" : "Total a pagar";
 
     /// <summary>"2 aulas × R$ 80,00 − R$ 80,00 de crédito"; com preços diferentes, só "2 aulas".</summary>
     private string TotalDetail
