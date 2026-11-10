@@ -84,7 +84,7 @@ public sealed class PaymentsTests(DatabaseFixture fixture) : IAsyncLifetime
 
     private Task<List<Payment>> PaymentsAsync(Guid? id = null) =>
         _factory.WithDbAsync(db => db.Payments.AsNoTracking().Where(p => p.BillingPeriodId == (id ?? _periodId))
-            .OrderBy(p => p.ReportedAtUtc).ThenBy(p => p.CreatedAtUtc).ToListAsync());
+            .OrderBy(p => p.ReportedAtUtc).ThenBy(p => p.DecidedAtUtc == null).ThenBy(p => p.DecidedAtUtc).ToListAsync());
 
     private Task<List<(string Action, string? Metadata)>> PaymentAuditAsync() =>
         _factory.WithDbAsync(async db => (await db.AuditLogs.AsNoTracking().Where(a => a.EntityType == "Payment")
@@ -313,7 +313,7 @@ public sealed class PaymentsTests(DatabaseFixture fixture) : IAsyncLifetime
         var payment = Assert.Single(await PaymentsAsync());
         Assert.Equal(PaymentStatus.Confirmed, payment.Status);
         Assert.Equal(_personal.Account.Id, payment.DecidedByUserId);
-        Assert.Equal(["PaymentReported", "PaymentConfirmed"], (await PaymentAuditAsync()).Select(a => a.Action));
+        Assert.Equal(["PaymentConfirmed", "PaymentReported"], (await PaymentAuditAsync()).Select(a => a.Action).Order());
 
         var student = await PageAsync(_student.Client, $"/aluno/pagamentos/{_periodId}");
         Assert.Contains("Pagamento confirmado pelo Carlos Lima em 12/11. Este demonstrativo está quitado.", student);
@@ -451,7 +451,8 @@ public sealed class PaymentsTests(DatabaseFixture fixture) : IAsyncLifetime
         Assert.Contains("Você informou o pagamento em", again);
 
         var audit = await PaymentAuditAsync();
-        Assert.Equal(["PaymentReported", "PaymentRejected", "PaymentReported"], audit.Select(a => a.Action));
+        // Relógio parado: as três ações têm o mesmo instante, então compara sem ordem.
+        Assert.Equal(["PaymentRejected", "PaymentReported", "PaymentReported"], audit.Select(a => a.Action).Order());
         Assert.All(audit, a => Assert.DoesNotContain("caiu", a.Metadata));
     }
 

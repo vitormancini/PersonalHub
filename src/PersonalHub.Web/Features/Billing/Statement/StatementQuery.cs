@@ -155,7 +155,8 @@ public sealed class StatementQuery(AppDbContext db)
 
         var payments = await db.Payments
             .Where(p => p.BillingPeriodId == head.Id)
-            .OrderBy(p => p.ReportedAtUtc).ThenBy(p => p.CreatedAtUtc)
+            // No mesmo instante, o pagamento ainda sem decisão (o ativo) vem por último.
+            .OrderBy(p => p.ReportedAtUtc).ThenBy(p => p.DecidedAtUtc == null).ThenBy(p => p.DecidedAtUtc)
             .Select(p => new PaymentEntry(p.Id, p.Status, p.ReportedAtUtc, p.DecidedAtUtc, p.Notes, p.DecisionNote,
                 p.DecidedByUserId == p.ReportedByUserId))
             .AsNoTracking()
