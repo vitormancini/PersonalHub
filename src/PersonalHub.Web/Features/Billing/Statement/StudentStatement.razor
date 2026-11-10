@@ -1,0 +1,56 @@
+@page "/aluno/pagamentos/{BillingPeriodId:guid}"
+@attribute [Authorize(Roles = AppRoles.Student)]
+@layout StudentLayout
+@using PersonalHub.Web.Domain.Billing
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Billing
+@inject StatementQuery Query
+@inject NavigationManager Navigation
+
+@* O aluno vê só demonstrativos dos próprios vínculos. Avisar o pagamento pelo app chega na Fase 5. *@
+
+<PersonalPageHeader Title="Demonstrativo" BackHref="/aluno/pagamentos" BackLabel="Voltar para pagamentos" />
+
+@if (_view is null)
+{
+    return;
+}
+
+<div class="ph-detail">
+    <div class="ph-lesson-head">
+        <span class="ph-pill @BillingDisplay.StatusPillClass(_view.Status)">@BillingDisplay.StatusLabel(_view.Status)</span>
+        <h2 class="ph-profile-name">@BillingDisplay.MonthYear(_view.ReferenceMonth)</h2>
+        <p class="ph-lesson-when">Com @_view.PersonalName · vencimento @BillingDisplay.Date(_view.DueDate)</p>
+    </div>
+
+    <StatementBody View="_view" ForStudent="true" />
+
+    @if (_view.Status != BillingPeriodStatus.Paid)
+    {
+        <div class="ph-alert ph-alert-info">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+            <p>Pague direto ao @_view.PersonalName, como vocês combinaram. Avisar o pagamento pelo app chega na próxima etapa.</p>
+        </div>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public Guid BillingPeriodId { get; set; }
+
+    private StatementView? _view;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        _view = await Query.ForStudentAsync(userId, BillingPeriodId, HttpContext.RequestAborted);
+        if (_view is null)
+        {
+            // Demonstrativo de outro aluno ou inexistente: mesma resposta.
+            Navigation.NotFound();
+        }
+    }
+}

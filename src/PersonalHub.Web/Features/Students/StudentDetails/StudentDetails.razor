@@ -7,7 +7,10 @@
 @using PersonalHub.Web.Features.Students.ManageInvite
 @using PersonalHub.Web.Domain
 @using PersonalHub.Web.Features.Lessons.ListLessons
+@using PersonalHub.Web.Features.Billing
+@using PersonalHub.Web.Features.Billing.Statement
 @inject StudentDetailsQuery Query
+@inject StatementQuery Statements
 @inject ListLessonsQuery LessonsQuery
 @inject TimeProvider Clock
 @inject InviteActionsHandler InviteActions
@@ -167,6 +170,25 @@
         </section>
     }
 
+    <section class="ph-section-card" aria-labelledby="demonstrativo">
+        <h3 id="demonstrativo" class="ph-section-title">Último demonstrativo</h3>
+        @if (_latest is null)
+        {
+            <p class="ph-note mb-0">Nenhum demonstrativo ainda. O primeiro sai no próximo vencimento com aulas confirmadas.</p>
+        }
+        else
+        {
+            <a href="/personal/financeiro/@_latest.Id" class="ph-list-item">
+                <span class="ph-list-text">
+                    <span class="ph-list-title">@BillingDisplay.MonthYear(_latest.ReferenceMonth)</span>
+                    <span class="ph-list-subtitle">Vencimento @BillingDisplay.Date(_latest.DueDate) · @BillingDisplay.Money(_latest.TotalAmount)</span>
+                </span>
+                <span class="ph-pill @BillingDisplay.StatusPillClass(_latest.Status)">@BillingDisplay.StatusLabel(_latest.Status)</span>
+                <svg class="ph-list-chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6" /></svg>
+            </a>
+        }
+    </section>
+
     @if (_view.Status == PersonalStudentStatus.Inactive)
     {
         <a href="/personal/alunos/@PersonalStudentId/vinculo" class="ph-btn ph-btn-primary ph-btn-block">Reativar vínculo</a>
@@ -190,6 +212,7 @@
     private StudentDetailsView? _view;
     private bool _notInvited;
     private LessonCounts? _lessons;
+    private LatestStatement? _latest;
     private DateOnly _month;
 
     /// <summary>Mensagem de sucesso depois de um redirecionamento (PRG). Só textos fixos: nada vem da URL para a tela.</summary>
@@ -221,6 +244,7 @@
         var today = SaoPaulo.ToLocalDate(Clock.GetUtcNow().UtcDateTime);
         _month = new DateOnly(today.Year, today.Month, 1);
         _lessons = await LessonsQuery.CountsAsync(UserId, _month, PersonalStudentId, HttpContext.RequestAborted);
+        _latest = await Statements.LatestForPersonalAsync(UserId, PersonalStudentId, HttpContext.RequestAborted);
     }
 
     private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;

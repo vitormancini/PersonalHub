@@ -103,6 +103,26 @@ O personal cadastra o aluno em **Alunos → Novo aluno** (`/personal/alunos/novo
 - O aluno abre o link, cria a senha (ou entra com a senha atual, se o e-mail já tiver conta), aceita os termos e cai em `/aluno`.
 - O caminho `/convite/*` é limitado a 20 requisições por minuto por IP (`Students:InviteRateLimit`), responde com `Referrer-Policy: no-referrer` e aparece nos logs como `/convite/[redacted]`.
 
+## Demonstrativo e fechamento mensal
+
+No dia do vencimento de cada aluno (a partir de 00:00 de Brasília), o app emite o demonstrativo do mês anterior com as aulas confirmadas e ainda não cobradas (D-043 a D-048). O personal vê em **Financeiro** (`/personal/financeiro`); o aluno, em **Pagamentos** (`/aluno/pagamentos`).
+
+- O fechamento roda dentro do app (`BackgroundService`): na partida e a cada hora. Se o app ficou fora do ar no dia, a próxima execução recupera. Configuração: `Billing:Closing:Enabled` (padrão `true`) e `Billing:Closing:Interval` (padrão `01:00:00`).
+- É idempotente e seguro com mais de uma instância (advisory lock do PostgreSQL + índices únicos).
+- Para rodar uma vez, sem subir o servidor web:
+
+```bash
+dotnet run --project src/PersonalHub.Web -- close-billing
+```
+
+- Para simular o dia do vencimento em desenvolvimento (só com `ASPNETCORE_ENVIRONMENT=Development`), passe a data; o relógio fica em 06:00 de Brasília desse dia:
+
+```bash
+dotnet run --project src/PersonalHub.Web -- close-billing --date 2026-12-10
+```
+
+- Saída: código 0 (ok), 1 (falha em algum vínculo, ou outra execução em andamento) ou 2 (uso incorreto).
+
 ## Autorização
 
 Toda rota exige login por padrão (`FallbackPolicy`). Uma página nova sem atributo fica protegida; as públicas precisam de `[AllowAnonymous]` explícito: `/`, `/entrar`, `/convite/{token}`, `/termos`, `/privacidade`, `/Error`, `/not-found`, `/health`, `POST /sair` e os arquivos estáticos. O teste `AuthorizationPolicyTests` falha se uma rota pública nova aparecer fora dessa lista.

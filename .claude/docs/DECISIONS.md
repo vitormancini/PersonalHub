@@ -310,6 +310,58 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 - Consequências: aula excluída não entra em demonstrativo. O crédito de aula já cobrada em período fechado (D-023) fica para a Fase 4. Ação auditada como `LessonDeleted` (sem o motivo no metadata).
 - Aprovado por: Vítor Mancini
 
+### D-043 — Fechamento do demonstrativo
+- Data: 2026-11-10
+- Estado: Aprovada
+- Contexto: D-019 definiu o período; faltava dizer o que entra e quando.
+- Decisão: no dia do vencimento (`DueDate` ajustado por D-025), a partir de 00:00 de `America/Sao_Paulo`, emite o demonstrativo do mês anterior (`ReferenceMonth`). Itens: todas as aulas `Approved`, não excluídas, com `OccurredAt` antes do fim do mês de referência e ainda não cobradas (inclui confirmadas com atraso de meses anteriores). Aulas `Pending` ficam de fora e o demonstrativo informa quantas aguardam. `Description` e `Amount` são congelados (`UnitPrice` da aula).
+- Alternativas consideradas: cobrar só aulas do próprio mês; esperar as pendentes.
+- Consequências: o corte é a meia-noite do vencimento: entra o que foi confirmado antes dela e vira crédito o que foi excluído antes dela. Assim o resultado não depende da hora em que o job roda (inclusive ao recuperar dias perdidos). A quantidade de aulas aguardando é calculada na hora da consulta, não gravada.
+- Aprovado por: Vítor Mancini
+
+### D-044 — Mês sem cobrança e total zero
+- Data: 2026-11-10
+- Estado: Aprovada
+- Contexto: meses sem aula e créditos maiores que o total.
+- Decisão: sem aula a cobrar e sem crédito, não emite demonstrativo naquele mês. Créditos que zeram ou passam do total: emite com `TotalAmount` 0 já `Paid` e leva o saldo para o próximo (D-023).
+- Alternativas consideradas: emitir demonstrativo zerado todo mês.
+- Consequências: o saldo levado adiante vira um item `Adjustment` sem `LessonId` ("Saldo de crédito de {mês}") no próximo demonstrativo. Só o saldo, sem aula nem crédito novo, não dispara emissão: ele espera o próximo demonstrativo com movimento (interpretação registrada na implementação da Fase 4).
+- Aprovado por: Vítor Mancini
+
+### D-045 — Crédito por aula excluída depois de cobrada
+- Data: 2026-11-10
+- Estado: Aprovada
+- Contexto: implementa D-023 e a pendência de D-042.
+- Decisão: excluir aula já cobrada em demonstrativo emitido gera item `Adjustment` negativo no próximo demonstrativo do vínculo; o emitido nunca muda.
+- Alternativas consideradas: reabrir o demonstrativo; recalcular o total.
+- Consequências: o crédito é gerado no fechamento seguinte (a exclusão não grava nada no faturamento). O índice único `(LessonId, Kind)` impede creditar duas vezes. O detalhe da aula excluída avisa que ela volta como crédito.
+- Aprovado por: Vítor Mancini
+
+### D-046 — Vínculo inativo
+- Data: 2026-11-10
+- Estado: Aprovada
+- Contexto: vínculo inativado com aulas ainda não cobradas.
+- Decisão: vínculo inativo ainda fecha no próximo vencimento o que estiver pendente de cobrança.
+- Consequências: depois disso, sem aula a cobrar, não há novos demonstrativos (D-044).
+- Aprovado por: Vítor Mancini
+
+### D-047 — Agendamento do fechamento
+- Data: 2026-11-10
+- Estado: Aprovada
+- Contexto: ARCHITECTURE §7 pedia comparar `BackgroundService` e agendador gerenciado.
+- Decisão: `BackgroundService` no próprio app verifica a cada hora (e na partida) os vínculos com fechamento devido, inclusive dias perdidos enquanto o app esteve fora; idempotente pelos índices únicos `(PersonalStudentId, ReferenceMonth)` e `(LessonId, Kind)`, em transação por vínculo, com advisory lock do Postgres para não rodar em paralelo (mais de uma instância na AWS). Logs estruturados sem dados pessoais. Sem serviço externo no MVP.
+- Alternativas consideradas: EventBridge Scheduler/cron chamando um endpoint; Hangfire/Quartz.
+- Consequências: com o app fora por mais de um vencimento, fecha só o mês mais recente vencido, que leva as aulas dos meses anteriores; nunca fecha um mês anterior a um demonstrativo existente. Há o comando `close-billing` (com `--date` só em Development) para rodar o fechamento manualmente.
+- Aprovado por: Vítor Mancini
+
+### D-048 — Rótulos do demonstrativo
+- Data: 2026-11-10
+- Estado: Aprovada
+- Contexto: nomes técnicos de `BillingPeriodStatus`.
+- Decisão: `Issued` aparece como "Aguardando pagamento", `Paid` como "Pago" (`PaymentReported` fica para a Fase 5). Nesta fase não há como marcar pago, exceto total zero.
+- Consequências: rótulos centralizados em `BillingDisplay`.
+- Aprovado por: Vítor Mancini
+
 ## Modelo para novas decisões
 
 ### D-XXX — Título

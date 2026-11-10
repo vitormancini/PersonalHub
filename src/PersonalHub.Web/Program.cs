@@ -3,6 +3,8 @@ using PersonalHub.Web.Components;
 using PersonalHub.Web.Features.Authentication.Login;
 using PersonalHub.Web.Features.Authentication.Logout;
 using PersonalHub.Web.Features.Authentication.ProvisionPersonal;
+using PersonalHub.Web.Features.Billing;
+using PersonalHub.Web.Features.Billing.CloseBilling;
 using PersonalHub.Web.Features.Lessons;
 using PersonalHub.Web.Features.Students;
 using PersonalHub.Web.Infrastructure.Hosting;
@@ -14,6 +16,12 @@ using PersonalHub.Web.Infrastructure.Persistence;
 if (ProvisionPersonalCommand.IsInvoked(args))
 {
     return await ProvisionPersonalCommand.RunAsync(args);
+}
+
+// Fechamento manual (D-047): roda uma vez e encerra. Útil para testar um vencimento localmente.
+if (CloseBillingCommand.IsInvoked(args))
+{
+    return await CloseBillingCommand.RunAsync(args);
 }
 
 var builder = WebApplication.CreateBuilder(args);
@@ -31,6 +39,7 @@ builder.Services.AddLoginRateLimiting();
 builder.Services.AddScoped<LoginHandler>();
 builder.Services.AddStudents();
 builder.Services.AddLessons();
+builder.Services.AddBilling(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();

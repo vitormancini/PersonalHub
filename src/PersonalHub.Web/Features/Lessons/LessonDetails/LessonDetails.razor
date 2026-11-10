@@ -44,7 +44,14 @@
                 {
                     <p class="ph-reason">Motivo: @_view.DeletionReason</p>
                 }
-                <p>Não entra em nenhum demonstrativo. Fica no histórico para consulta.</p>
+                @if (_view.CreditedLater)
+                {
+                    <p>Foi cobrada no demonstrativo de @Billing.BillingDisplay.MonthNameLower(_view.BilledInMonth!.Value). O valor volta como crédito no próximo demonstrativo.</p>
+                }
+                else
+                {
+                    <p>Não entra em nenhum demonstrativo. Fica no histórico para consulta.</p>
+                }
             </div>
         </div>
     }
