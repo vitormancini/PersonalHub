@@ -1,0 +1,131 @@
+@page "/aluno/aulas/{LessonId:guid}/recusar"
+@attribute [Authorize(Roles = AppRoles.Student)]
+@layout StudentLayout
+@using PersonalHub.Web.Domain.Lessons
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Lessons.LessonDetails
+@using PersonalHub.Web.Features.Lessons.StudentLessons
+@inject LessonDetailsQuery Query
+@inject RespondLessonHandler Handler
+@inject NavigationManager Navigation
+
+@* As sugestões são botões de envio que preenchem o motivo pelo servidor (funciona sem JavaScript); com JavaScript,
+   preenchem o campo direto (data-ph-fill). Recusar só acontece pelo botão "Recusar aula". *@
+
+<PersonalPageHeader Title="Recusar aula" BackHref="@DetailsHref" BackLabel="Voltar para a aula" />
+
+<form method="post" @formname="recusar" @onsubmit="SubmitAsync" class="ph-confirm" novalidate data-ph-busy-form
+      aria-labelledby="recusar-titulo">
+    <AntiforgeryToken />
+    @if (_view is not null)
+    {
+        <h2 id="recusar-titulo" class="ph-confirm-title">
+            Recusar a aula de @LessonDisplay.DayMonth(_view.OccurredAtUtc) às @LessonDisplay.Time(_view.OccurredAtUtc)?
+        </h2>
+        <p class="ph-confirm-text">
+            A aula não será cobrada. @_view.PersonalName vê o motivo e, se algo estiver errado, registra a aula de novo.
+        </p>
+
+        <fieldset class="ph-field">
+            <legend class="ph-label">Sugestões</legend>
+            <div class="ph-chips">
+                @foreach (var suggestion in Suggestions)
+                {
+                    <button type="submit" name="sugestao" value="@suggestion" class="ph-chip-button"
+                            data-ph-fill="recusar-motivo" data-ph-fill-value="@suggestion">
+                        @suggestion
+                    </button>
+                }
+            </div>
+        </fieldset>
+
+        <div class="ph-field">
+            <label for="recusar-motivo" class="ph-label">Motivo</label>
+            <textarea id="recusar-motivo" name="motivo" class="ph-input ph-textarea @(_error is null ? null : "invalid")" rows="3"
+                      maxlength="@LessonRules.TextMaxLength" required aria-invalid="@(_error is null ? null : "true")"
+                      aria-describedby="recusar-motivo-error">@Motivo</textarea>
+            @if (_error is not null)
+            {
+                <span id="recusar-motivo-error" class="ph-field-error">@_error</span>
+            }
+        </div>
+
+        <div class="ph-stack-tight">
+            <button type="submit" class="ph-btn ph-btn-danger ph-btn-block" data-ph-busy-text="Recusando…">
+                <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                <span class="ph-btn-text">Recusar aula</span>
+            </button>
+            <a href="@DetailsHref" class="ph-btn ph-btn-outline ph-btn-block">Cancelar</a>
+        </div>
+    }
+</form>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public Guid LessonId { get; set; }
+
+    [SupplyParameterFromForm(FormName = "recusar", Name = "motivo")]
+    private string? Motivo { get; set; }
+
+    [SupplyParameterFromForm(FormName = "recusar", Name = "sugestao")]
+    private string? Sugestao { get; set; }
+
+    public static readonly string[] Suggestions = ["Não fiz esta aula", "Data ou horário errado", "Valor errado"];
+
+    private LessonDetailsView? _view;
+    private string? _error;
+
+    private string DetailsHref => $"/aluno/aulas/{LessonId}";
+
+    private Guid UserId => CurrentUser.IdOf(HttpContext.User)!.Value;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _view = await Query.ForStudentAsync(UserId, LessonId, HttpContext.RequestAborted);
+        if (HttpMethods.IsPost(HttpContext.Request.Method))
+        {
+            // O POST sempre chega ao handler, que decide com a aula travada.
+            return;
+        }
+
+        if (_view is null)
+        {
+            Navigation.NotFound();
+        }
+        else if (!_view.CanRespond)
+        {
+            // Já respondida ou excluída: mostra a aula como está.
+            Navigation.NavigateTo(DetailsHref);
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (Sugestao is not null && Suggestions.Contains(Sugestao) && _view is { CanRespond: true })
+        {
+            // Só preenche o campo; a recusa espera o botão "Recusar aula".
+            Motivo = Sugestao;
+            return;
+        }
+
+        var outcome = await Handler.RejectAsync(UserId, LessonId, Motivo, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+        switch (outcome)
+        {
+            case RespondLessonOutcome.ReasonRequired:
+                _error = "Escreva o motivo da recusa.";
+                return;
+            case RespondLessonOutcome.ReasonTooLong:
+                _error = $"O motivo pode ter até {LessonRules.TextMaxLength} caracteres.";
+                return;
+            case RespondLessonOutcome.AlreadyResponded:
+                Navigation.NavigateTo($"{DetailsHref}?aviso={StudentLessonNotice.AlreadyResponded}");
+                return;
+            default:
+                Navigation.NavigateTo($"/aluno/aulas?aviso={StudentLessonNotice.CodeFor(outcome, rejected: true)}");
+                return;
+        }
+    }
+}

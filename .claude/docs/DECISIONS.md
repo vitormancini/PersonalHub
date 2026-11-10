@@ -43,6 +43,11 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 | D-035 | E-mail do aluno | Editável só enquanto `Invited` (trocar revoga o convite); depois do aceite é o login e fica somente leitura |
 | D-036 | Alteração de valor e vencimento | Valor novo vale para aulas registradas a partir da alteração; vencimento novo, a partir do próximo demonstrativo |
 | D-037 | Inativar e reativar vínculo | Inativar mantém histórico e revoga convite; reativar volta para `Active` (com conta) ou `Invited` (novo link) |
+| D-038 | Rótulos das aulas | `Pending`/`Approved`/`Rejected` aparecem como "Aguardando"/"Confirmada"/"Recusada"; a ação do aluno é "Confirmar" |
+| D-039 | Registro de aula | Sem data/hora no futuro; retroativa permitida; vínculo `Invited` recebe aula, `Inactive` não; duração e observação opcionais; preço copiado do vínculo |
+| D-040 | Possível duplicada | Mesmo vínculo, data e horário mostra aviso e exige "Registrar mesmo assim"; não bloqueia |
+| D-041 | Aula não editável | Correção = excluir e registrar outra; o aluno responde uma única vez |
+| D-042 | Exclusão lógica da aula | Pendente: motivo opcional e some para o aluno; respondida: motivo obrigatório e o aluno vê "Excluída" com o motivo |
 
 ## Pendências que exigem decisão
 
@@ -258,6 +263,51 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 - Decisão: inativar mantém todo o histórico, impede novas aulas, revoga o convite em aberto e preenche `EndedAtUtc`. Reativar volta para `Active` se `StudentUserId` existe; senão volta para `Invited` com um novo link de convite gerado na hora. `EndedAtUtc` volta a ser nulo. A reativação é bloqueada se o personal tiver outro vínculo não inativo com o mesmo e-mail (o índice único existente também garante).
 - Alternativas consideradas: reativar sempre como `Invited`; criar um vínculo novo em vez de reativar.
 - Consequências: o personal retoma um aluno sem perder o histórico; o bloqueio por e-mail evita dois vínculos ativos para a mesma pessoa. Ações auditadas como `StudentLinkInactivated` e `StudentLinkReactivated`.
+- Aprovado por: Vítor Mancini
+
+### D-038 — Rótulos das situações da aula
+- Data: 2026-11-05
+- Estado: Aprovada
+- Contexto: os nomes técnicos `Pending`, `Approved` e `Rejected` não servem para a tela; "aprovar" soa burocrático para o aluno.
+- Decisão: na interface, `Pending` aparece como "Aguardando", `Approved` como "Confirmada" e `Rejected` como "Recusada"; aula excluída aparece como "Excluída". A ação do aluno é "Confirmar" (e "Recusar"). Os nomes no banco e no código não mudam.
+- Alternativas consideradas: "Pendente/Aprovada/Reprovada"; "Reconhecer aula".
+- Consequências: os rótulos ficam centralizados (`LessonDisplay`) e são os mesmos nas telas do personal e do aluno.
+- Aprovado por: Vítor Mancini
+
+### D-039 — Regras do registro de aula
+- Data: 2026-11-05
+- Estado: Aprovada
+- Contexto: o personal registra a aula depois de dá-la; o aluno pode ainda não ter aceitado o convite.
+- Decisão: data e hora não podem estar no futuro (relógio de `America/Sao_Paulo`, D-026); registro retroativo é permitido. Vínculo `Invited` pode receber aula, que fica `Pending` até o aluno criar a conta e responder; vínculo `Inactive` não recebe aula. Duração opcional (30, 45, 60 ou 90 minutos). Observação opcional, até 500 caracteres, visível ao aluno. `UnitPrice` é copiado de `LessonPrice` do vínculo no momento do registro (D-018).
+- Alternativas consideradas: bloquear registro para vínculo `Invited`; limitar o registro retroativo; duração livre.
+- Consequências: o personal não precisa esperar o aceite para registrar; mudar o preço do vínculo não altera aulas já registradas (D-036).
+- Aprovado por: Vítor Mancini
+
+### D-040 — Aviso de possível aula duplicada
+- Data: 2026-11-05
+- Estado: Aprovada
+- Contexto: duplo envio ou registro repetido do mesmo treino.
+- Decisão: se já existe aula não excluída do mesmo vínculo na mesma data e horário, a tela mostra um aviso e exige a confirmação "Registrar mesmo assim". Não há bloqueio nem restrição única no banco.
+- Alternativas consideradas: bloquear a duplicada; não avisar.
+- Consequências: casos legítimos (duas sessões no mesmo horário registradas por engano de horário, por exemplo) continuam possíveis; o aluno ainda pode recusar uma duplicada.
+- Aprovado por: Vítor Mancini
+
+### D-041 — Aula não editável e resposta única
+- Data: 2026-11-05
+- Estado: Aprovada
+- Contexto: editar uma aula já vista ou respondida pelo aluno quebraria a confiança no histórico.
+- Decisão: a aula não é editável; a correção é excluir e registrar outra (reforça D-021). O aluno responde uma única vez (confirmar ou recusar); a resposta é definitiva.
+- Alternativas consideradas: edição enquanto `Pending`; permitir ao aluno mudar a resposta.
+- Consequências: a resposta é conferida com a aula travada (`SELECT ... FOR UPDATE`); uma segunda resposta recebe mensagem amigável e não altera nada.
+- Aprovado por: Vítor Mancini
+
+### D-042 — Exclusão lógica da aula
+- Data: 2026-11-05
+- Estado: Aprovada
+- Contexto: o personal precisa corrigir registros sem apagar histórico.
+- Decisão: a exclusão é lógica (`DeletedAtUtc`, `DeletedByUserId`, `DeletionReason`). Aula `Pending`: motivo opcional e a aula some para o aluno. Aula `Approved` ou `Rejected`: motivo obrigatório e o aluno vê a aula como "Excluída" com o motivo. A regra é conferida com a aula travada: se o aluno respondeu enquanto o personal confirmava a exclusão, o pedido sem motivo volta pedindo um.
+- Alternativas consideradas: exclusão física; motivo sempre obrigatório.
+- Consequências: aula excluída não entra em demonstrativo. O crédito de aula já cobrada em período fechado (D-023) fica para a Fase 4. Ação auditada como `LessonDeleted` (sem o motivo no metadata).
 - Aprovado por: Vítor Mancini
 
 ## Modelo para novas decisões

@@ -67,7 +67,7 @@ public sealed class StudentDetailsTests(DatabaseFixture fixture) : IAsyncLifetim
     }
 
     [Fact]
-    public async Task Details_OfActiveStudent_ShowsLessonsPlaceholderAndNoInviteCard()
+    public async Task Details_OfActiveStudent_ShowsLessonsSummaryAndNoInviteCard()
     {
         var invite = await _factory.CreateInviteAsync(_personal.Account.Id);
         await _factory.ActivateAsync(invite.PersonalStudentId);
@@ -75,7 +75,8 @@ public sealed class StudentDetailsTests(DatabaseFixture fixture) : IAsyncLifetim
         var html = await (await _personal.Client.GetAsync(Details(invite.PersonalStudentId))).TextAsync();
 
         Assert.Contains("ph-pill-success\">Ativo<", html);
-        Assert.Contains("O histórico de aulas deste aluno aparece aqui a partir da Fase 3.", html);
+        Assert.Contains($"href=\"/personal/aulas/nova?aluno={invite.PersonalStudentId}\"", html);
+        Assert.Contains($"href=\"/personal/aulas?aluno={invite.PersonalStudentId}\"", html);
         Assert.DoesNotContain("Gerar novo link", html);
         Assert.Contains("Inativar vínculo", html);
     }

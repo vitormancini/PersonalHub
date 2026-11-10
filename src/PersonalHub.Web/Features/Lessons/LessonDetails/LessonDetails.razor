@@ -1,0 +1,148 @@
+@page "/personal/aulas/{LessonId:guid}"
+@attribute [Authorize(Policy = AppPolicies.ActivePersonal)]
+@layout PersonalLayout
+@using System.Globalization
+@using PersonalHub.Web.Domain
+@using PersonalHub.Web.Domain.Lessons
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.Students
+@using PersonalHub.Web.Features.Students.CreateStudent
+@inject LessonDetailsQuery Query
+@inject NavigationManager Navigation
+
+@* Somente leitura: aula não é editável (D-041). A única ação é excluir, numa página de confirmação própria. *@
+
+<PersonalPageHeader Title="Aula" BackHref="@BackHref" BackLabel="Voltar para aulas" />
+
+@if (_view is null)
+{
+    return;
+}
+
+<div class="ph-detail">
+    @if (Aviso == "excluida")
+    {
+        <div class="ph-alert ph-alert-success" role="status">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="m8 12 3 3 5-6" /></svg>
+            <p>Aula excluída.</p>
+        </div>
+    }
+
+    <div class="ph-lesson-head">
+        <span class="ph-pill @LessonDisplay.StatusPillClass(_view.Status, _view.Deleted)">@LessonDisplay.StatusLabel(_view.Status, _view.Deleted)</span>
+        <h2 class="ph-profile-name">@_view.StudentName</h2>
+        <p class="ph-lesson-when">@LessonDisplay.LongDate(_view.OccurredAtUtc) às @LessonDisplay.Time(_view.OccurredAtUtc)</p>
+    </div>
+
+    @if (_view.Deleted)
+    {
+        <div class="ph-alert ph-alert-muted">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
+            <div class="ph-alert-body">
+                <p><strong>Excluída por você em @LessonDisplay.Date(_view.DeletedAtUtc!.Value)</strong></p>
+                @if (_view.DeletionReason is not null)
+                {
+                    <p class="ph-reason">Motivo: @_view.DeletionReason</p>
+                }
+                <p>Não entra em nenhum demonstrativo. Fica no histórico para consulta.</p>
+            </div>
+        </div>
+    }
+    else if (_view.Status == LessonStatus.Rejected)
+    {
+        <div class="ph-alert ph-alert-danger">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="m15 9-6 6M9 9l6 6" /></svg>
+            <div class="ph-alert-body">
+                <p><strong>@FirstName recusou esta aula</strong></p>
+                <p class="ph-reason">Motivo: @_view.RejectionReason</p>
+                <p>Para corrigir, exclua esta aula e registre outra com os dados certos.</p>
+            </div>
+        </div>
+    }
+
+    <section class="ph-section-card" aria-labelledby="dados">
+        <h3 id="dados" class="ph-section-title">Dados</h3>
+        <dl class="ph-facts ph-facts-2">
+            <div>
+                <dt>Valor</dt>
+                <dd>@StudentDisplay.Money(_view.UnitPrice)</dd>
+            </div>
+            <div>
+                <dt>Duração</dt>
+                <dd>@LessonDisplay.Duration(_view.DurationMinutes)</dd>
+            </div>
+        </dl>
+        <dl class="ph-facts">
+            <div>
+                <dt>Observação</dt>
+                <dd class="ph-dd-text">@(_view.Notes ?? "Sem observação")</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="ph-section-card" aria-labelledby="historico">
+        <h3 id="historico" class="ph-section-title">Histórico</h3>
+        <ol class="ph-timeline">
+            <li>
+                <span class="ph-timeline-title">Registrada por você</span>
+                <span class="ph-timeline-meta">@LessonDisplay.DayMonthTime(_view.CreatedAtUtc)</span>
+            </li>
+            @if (_view.RespondedAtUtc is { } responded)
+            {
+                <li>
+                    <span class="ph-timeline-title">@(_view.Status == LessonStatus.Approved ? "Confirmada" : "Recusada") por @FirstName</span>
+                    <span class="ph-timeline-meta">@LessonDisplay.DayMonthTime(responded)</span>
+                </li>
+            }
+            else if (!_view.Deleted)
+            {
+                <li class="is-waiting">
+                    <span class="ph-timeline-title">Aguardando @FirstName confirmar</span>
+                    <span class="ph-timeline-meta">Sem prazo</span>
+                </li>
+            }
+            @if (_view.DeletedAtUtc is { } deleted)
+            {
+                <li>
+                    <span class="ph-timeline-title">Excluída por você</span>
+                    <span class="ph-timeline-meta">@LessonDisplay.DayMonthTime(deleted)</span>
+                </li>
+            }
+        </ol>
+    </section>
+
+    @if (!_view.Deleted)
+    {
+        <a href="/personal/aulas/@LessonId/excluir" class="ph-btn ph-btn-danger-outline ph-btn-block">Excluir aula</a>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [Parameter]
+    public Guid LessonId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "aviso")]
+    private string? Aviso { get; set; }
+
+    private LessonDetailsView? _view;
+
+    private string FirstName => WhatsAppInvite.FirstName(_view!.StudentName);
+
+    private string BackHref => _view is null
+        ? "/personal/aulas"
+        : $"/personal/aulas?mes={SaoPaulo.ToLocalDate(_view.OccurredAtUtc).ToString("yyyy-MM", CultureInfo.InvariantCulture)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        _view = await Query.ForPersonalAsync(userId, LessonId, HttpContext.RequestAborted);
+        if (_view is null)
+        {
+            // Aula de outro personal ou inexistente: mesma resposta, sem revelar qual dos dois.
+            Navigation.NotFound();
+        }
+    }
+}

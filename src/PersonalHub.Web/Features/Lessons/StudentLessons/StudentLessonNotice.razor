@@ -1,0 +1,57 @@
+@using PersonalHub.Web.Features.Lessons.RespondLesson
+
+@* Aviso depois de uma resposta do aluno (PRG). Só textos fixos: nada vem da URL para a tela. *@
+
+@switch (Code)
+{
+    case Confirmed:
+        <div class="ph-alert ph-alert-success" role="status">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="m8 12 3 3 5-6" /></svg>
+            <p>Aula confirmada.</p>
+        </div>
+        break;
+    case Rejected:
+        <div class="ph-alert ph-alert-success" role="status">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="m8 12 3 3 5-6" /></svg>
+            <p>Aula recusada. O personal vê o motivo.</p>
+        </div>
+        break;
+    case AlreadyResponded:
+        <div class="ph-alert ph-alert-warning" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>Esta aula já tinha sido respondida. A resposta não muda.</p>
+        </div>
+        break;
+    case Unavailable:
+        <div class="ph-alert ph-alert-warning" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>Esta aula não está mais disponível para resposta. O personal pode tê-la excluído.</p>
+        </div>
+        break;
+    case NotConfirmed:
+        <div class="ph-alert ph-alert-danger" role="alert">
+            <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+            <p>Não foi possível confirmar a aula. Tente de novo.</p>
+        </div>
+        break;
+}
+
+@code {
+    public const string Confirmed = "confirmada";
+    public const string Rejected = "recusada";
+    public const string AlreadyResponded = "ja-respondida";
+    public const string Unavailable = "indisponivel";
+
+    /// <summary>O envio de "Confirmar" chegou sem a aula (formulário incompleto): nada foi alterado.</summary>
+    public const string NotConfirmed = "nao-confirmada";
+
+    [Parameter]
+    public string? Code { get; set; }
+
+    public static string CodeFor(RespondLessonOutcome outcome, bool rejected) => outcome switch
+    {
+        RespondLessonOutcome.Succeeded => rejected ? Rejected : Confirmed,
+        RespondLessonOutcome.AlreadyResponded => AlreadyResponded,
+        _ => Unavailable
+    };
+}
