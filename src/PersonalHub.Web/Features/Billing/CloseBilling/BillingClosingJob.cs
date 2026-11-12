@@ -5,6 +5,7 @@ using Npgsql;
 using PersonalHub.Web.Domain;
 using PersonalHub.Web.Domain.Auditing;
 using PersonalHub.Web.Domain.Billing;
+using PersonalHub.Web.Features.Notifications;
 using PersonalHub.Web.Infrastructure.Persistence;
 
 namespace PersonalHub.Web.Features.Billing.CloseBilling;
@@ -150,6 +151,9 @@ public sealed partial class BillingClosingJob(AppDbContext db, TimeProvider cloc
             }),
             CreatedAtUtc = now
         });
+
+        // Aviso ao aluno na mesma transação: o índice único do mês vale também para o aviso (chave = demonstrativo).
+        await db.StatementIssuedAsync(period, result.LessonCount, now, cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

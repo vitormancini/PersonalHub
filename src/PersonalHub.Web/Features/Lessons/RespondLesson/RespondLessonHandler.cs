@@ -1,4 +1,5 @@
 using PersonalHub.Web.Domain.Lessons;
+using PersonalHub.Web.Features.Notifications;
 using PersonalHub.Web.Infrastructure.Persistence;
 
 namespace PersonalHub.Web.Features.Lessons.RespondLesson;
@@ -83,6 +84,7 @@ public sealed partial class RespondLessonHandler(AppDbContext db, TimeProvider c
         // Sem o motivo no metadata: é texto livre do aluno e fica só na aula.
         db.AddLessonAudit(studentUserId, lesson.Status == LessonStatus.Approved ? "LessonApproved" : "LessonRejected",
             lesson.Id, now, correlationId);
+        await db.LessonRespondedAsync(lesson, now, cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

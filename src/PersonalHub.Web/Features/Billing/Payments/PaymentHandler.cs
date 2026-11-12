@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PersonalHub.Web.Domain.Billing;
 using PersonalHub.Web.Domain.Lessons;
+using PersonalHub.Web.Features.Notifications;
 using PersonalHub.Web.Infrastructure.Persistence;
 
 namespace PersonalHub.Web.Features.Billing.Payments;
@@ -52,6 +53,7 @@ public sealed partial class PaymentHandler(AppDbContext db, TimeProvider clock, 
         var payment = Payment.Report(period!, studentUserId, text, now);
         db.Payments.Add(payment);
         db.AddPaymentAudit(studentUserId, "PaymentReported", payment, now, correlationId);
+        await db.PaymentReportedAsync(period!, payment, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -84,6 +86,7 @@ public sealed partial class PaymentHandler(AppDbContext db, TimeProvider clock, 
         var payment = Payment.RecordByPersonal(period!, personalUserId, now);
         db.Payments.Add(payment);
         db.AddPaymentAudit(personalUserId, "PaymentRecorded", payment, now, correlationId);
+        await db.PaymentDecidedAsync(period!, payment, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -126,6 +129,7 @@ public sealed partial class PaymentHandler(AppDbContext db, TimeProvider clock, 
         }
 
         db.AddPaymentAudit(personalUserId, confirm ? "PaymentConfirmed" : "PaymentRejected", payment, now, correlationId);
+        await db.PaymentDecidedAsync(period!, payment, now, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
