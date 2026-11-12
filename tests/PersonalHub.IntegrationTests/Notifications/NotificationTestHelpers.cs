@@ -111,3 +111,75 @@ public static partial class NotificationTestHelpers
     [GeneratedRegex("name=\"(?:New|Existing)\\.PhoneProof\" value=\"([^\"]+)\"")]
     private static partial Regex ProofInput();
 }
+
+/// <summary>Relógio que o teste avança.</summary>
+public sealed class MutableClock(DateTimeOffset now) : TimeProvider
+{
+    public DateTimeOffset Now { get; set; } = now;
+
+    public override DateTimeOffset GetUtcNow() => Now;
+
+    public void Advance(TimeSpan by) => Now += by;
+}
+
+public static class NotificationTestApp
+{
+    /// <summary>Host com o adapter falso e o relógio do teste. O lote do dispatcher é grande para pegar tudo de uma vez.</summary>
+    public static WebApplicationFactory<Program> WithWhatsApp(
+        this WebApplicationFactory<Program> factory, FakeWhatsAppSender sender, TimeProvider? clock = null) =>
+        factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("Notifications:Worker:BatchSize", "100000");
+            builder.ConfigureServices(services => { });
+            Microsoft.AspNetCore.TestHost.WebHostBuilderExtensions.ConfigureTestServices(builder, services =>
+            {
+                services.AddSingleton<IWhatsAppSender>(sender);
+                if (clock is not null)
+                {
+                    services.AddSingleton(clock);
+                }
+            });
+        });
+
+    /// <summary>Uma rodada do worker, como o BackgroundService faria.</summary>
+    public static async Task<DispatchResult> DispatchAsync(this WebApplicationFactory<Program> factory)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<NotificationDispatcher>().RunOnceAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Encerra o que outros testes deixaram na fila (o banco é compartilhado e os testes da coleção rodam em sequência),
+    /// para o dispatcher só tratar as linhas deste teste.
+    /// </summary>
+    public static Task<int> QuiesceOutboxAsync(this WebApplicationFactory<Program> factory) =>
+        factory.WithDbAsync(db => db.NotificationOutbox
+            .Where(o => o.Status == NotificationStatus.Pending || o.Status == NotificationStatus.Processing)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(o => o.Status, NotificationStatus.Failed)
+                .SetProperty(o => o.LeaseExpiresAtUtc, (DateTime?)null)
+                .SetProperty(o => o.LastError, "teste")));
+
+    /// <summary>Linha pronta na outbox (sem passar por um handler).</summary>
+    public static async Task<NotificationOutbox> EnqueueAsync(
+        this WebApplicationFactory<Program> factory, DateTime nowUtc, string? phone = "+5511987652468",
+        bool isAuthentication = false, string? code = null, DateTime? expiresAtUtc = null, string template = "ph_nova_aula")
+    {
+        var key = $"teste:{Guid.NewGuid():N}";
+        await factory.WithDbAsync(async db =>
+        {
+            var protector = factory.Services.GetRequiredService<OutboxCodeProtector>();
+            var payload = code is null
+                ? new NotificationPayload(["Mariana", "Carlos Lima", "12/11", "07:30"], "aluno/aulas/x")
+                : new NotificationPayload([], null, protector.Protect(code));
+            Assert.True(await db.EnqueueNotificationAsync(
+                new NotificationRequest(template, key, null, phone, payload, isAuthentication, expiresAtUtc), nowUtc,
+                CancellationToken.None));
+            await db.SaveChangesAsync();
+        });
+        return (await factory.OutboxByKeyAsync(key))!;
+    }
+
+    public static Task<NotificationOutbox> OutboxRowAsync(this WebApplicationFactory<Program> factory, Guid id) =>
+        factory.WithDbAsync(db => db.NotificationOutbox.AsNoTracking().SingleAsync(o => o.Id == id));
+}

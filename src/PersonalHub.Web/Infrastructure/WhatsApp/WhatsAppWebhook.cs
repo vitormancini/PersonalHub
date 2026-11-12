@@ -57,7 +57,17 @@ public static partial class WhatsAppWebhook
     {
         foreach (var endpoint in new[] { endpoints.MapGet(Path, Verify), endpoints.MapPost(Path, ReceiveAsync) })
         {
-            endpoint.AllowAnonymous().DisableAntiforgery().RequireRateLimiting(RateLimitPolicy);
+            endpoint.AllowAnonymous().DisableAntiforgery().RequireRateLimiting(RateLimitPolicy)
+                // Respostas de API: 401/404 sem corpo não devem virar a página de erro HTML (re-execução de status).
+                .AddEndpointFilter(async (context, next) =>
+                {
+                    if (context.HttpContext.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodePagesFeature>() is { } pages)
+                    {
+                        pages.Enabled = false;
+                    }
+
+                    return await next(context);
+                });
         }
 
         return endpoints;
