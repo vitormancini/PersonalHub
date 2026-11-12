@@ -37,7 +37,9 @@ erDiagram
     BillingPeriod ||--|{ BillingPeriodItem : "compõe"
     Lesson |o--o{ BillingPeriodItem : "cobrada ou creditada em"
     BillingPeriod ||--o{ Payment : "recebe"
-    AspNetUsers ||--o{ NotificationOutbox : "recebe"
+    AspNetUsers |o--o{ NotificationOutbox : "recebe"
+    AspNetUsers |o--o{ PhoneVerificationCode : "confirma"
+    PersonalStudent |o--o{ PhoneVerificationCode : "convite confirma"
     AspNetUsers ||--o{ AuditLog : "executa"
 
     AspNetUsers {
@@ -100,9 +102,18 @@ erDiagram
     }
     NotificationOutbox {
         uuid Id PK
-        uuid RecipientUserId FK
-        string EventType
-        string Status
+        uuid RecipientUserId FK "nulo no código do convite"
+        string EventType "nome do template"
+        string Status "Pending, Processing, Sent, Failed"
+        string IdempotencyKey "único"
+    }
+    PhoneVerificationCode {
+        uuid Id PK
+        string Purpose "InviteAcceptance, PhoneConfirmation, PasswordReset"
+        uuid UserId FK
+        uuid PersonalStudentId FK
+        bytea CodeHash "HMAC, nunca o código"
+        timestamptz ExpiresAtUtc
     }
     AuditLog {
         uuid Id PK
@@ -116,6 +127,8 @@ erDiagram
 
 ### 4.1 Identity
 ASP.NET Core Identity com chaves `Guid` e duas roles: `Personal` e `Student`. Nenhuma tabela de senha própria. `AspNetUsers.FullName varchar(150) null` guarda o nome que o aluno informou no aceite do convite (D-032). Não permitir autoelevação para a role `Personal`.
+
+Fase 6: `AspNetUsers.PhoneNumber` (E.164) e `PhoneNumberConfirmed` passam a ser usados. São preenchidos quando o aluno confirma o código no aceite do convite (D-057) ou na confirmação de celular dos alunos antigos (D-059), sempre com o `StudentPhone` do vínculo. É o celular dos avisos ao aluno e da recuperação de senha (D-058). O personal recebe no `PersonalProfile.PhoneNumber`.
 
 ### 4.2 PersonalProfile
 
@@ -216,21 +229,29 @@ Fechamento (D-043 a D-047): no vencimento, a partir de 00:00 de São Paulo, entr
 Registro direto pelo personal (D-052): `Confirmed` com `ReportedByUserId = DecidedByUserId` (o personal) e mesmo instante; não há coluna de origem, porque o aluno nunca decide. As transições estão em `Domain/Billing/Payment` e `BillingPeriod`; o handler trava o período com `FOR UPDATE`.
 
 ### 4.9 NotificationOutbox
-Fila persistente de notificações a enviar:
-- Id
-- EventType
-- RecipientUserId / Phone snapshot conforme necessidade
-- Payload (JSON validado e sem segredos)
-- Channel (WhatsApp)
-- Status (Pending, Processing, Sent, Failed)
-- Attempts
-- NextAttemptAtUtc
-- SentAtUtc
-- ProviderMessageId
-- LastError (sanitizado)
-- IdempotencyKey `varchar(100)`, único (ex.: `lesson-created:<id>`), para nunca enfileirar o mesmo aviso duas vezes
+Fila persistente de notificações a enviar (Fase 6, D-060 a D-062).
 
-Índice `(Status, NextAttemptAtUtc)`. A outbox salva a operação de negócio e a intenção de notificar na mesma transação. Um worker envia depois e aplica retry controlado. Nunca depender do envio síncrono de WhatsApp para concluir registro de aula ou pagamento.
+| Coluna | Tipo | Regras |
+| --- | --- | --- |
+| EventType | varchar(100) | nome do template (`ph_nova_aula`, `ph_codigo`…) |
+| RecipientUserId | uuid null | FK Identity; nulo no código do convite (o aluno ainda não tem conta) |
+| RecipientPhone | varchar(20) null | E.164 no momento do enfileiramento; nulo = sem celular confirmado (encerra como `sem-celular`) |
+| Payload | jsonb | `parameters` do corpo, `button` (sufixo da URL) e, nos códigos, `code` protegido pelo Data Protection; vira `{}` quando o código sai ou falha |
+| Channel | varchar(16) | `WhatsApp` |
+| Status | varchar(16) | `Pending`, `Processing`, `Sent`, `Failed` |
+| IsAuthentication | boolean | código: ignora o silêncio e expira com o código |
+| Attempts | int | `>= 0`; contada ao pegar a linha; máximo 5 |
+| NextAttemptAtUtc | timestamptz | quando pode sair (silêncio 22h–8h e backoff) |
+| LeaseExpiresAtUtc | timestamptz null | obrigatório com `Processing`; vencido, outra rodada retoma |
+| ExpiresAtUtc | timestamptz null | depois disso não envia (código vencido) |
+| SentAtUtc | timestamptz null | obrigatório com `Sent` |
+| ProviderMessageId | varchar(128) null | id da Meta (`messages[0].id`), único quando preenchido |
+| DeliveryStatus | varchar(16) null | `Sent`, `Delivered`, `Read`, `Failed`, pelo webhook; só avança |
+| DeliveredAtUtc, ReadAtUtc | timestamptz null | pelo webhook |
+| LastError | varchar(1000) null | só códigos sanitizados (`meta:131026`, `http:503`, `sem-celular`, `expirado`) |
+| IdempotencyKey | varchar(100) | única: `lesson-created:<id>`, `lesson-approved:<id>`, `lesson-rejected:<id>`, `lesson-deleted:<id>`, `statement-issued:<id>`, `payment-reported:<id>`, `payment-confirmed:<id>`, `payment-rejected:<id>`, `phone-code:<id>` |
+
+Índices: único `IdempotencyKey`; `(Status, NextAttemptAtUtc)`; único `ProviderMessageId` onde não nulo. A operação de negócio e o aviso são salvos na mesma transação; o worker envia depois e aplica retry controlado. Nunca depender do envio síncrono de WhatsApp para concluir registro de aula ou pagamento.
 
 ### 4.10 AuditLog
 Trilha de auditoria para ações críticas:
@@ -244,6 +265,26 @@ Trilha de auditoria para ações críticas:
 - Metadata minimizada e sanitizada
 
 Índice `(EntityType, EntityId)`. Não copiar senha, tokens ou conteúdo pessoal desnecessário para auditoria.
+
+### 4.11 PhoneVerificationCode
+Códigos de 6 dígitos enviados por WhatsApp (D-056).
+
+| Coluna | Tipo | Regras |
+| --- | --- | --- |
+| Purpose | varchar(24) | `InviteAcceptance`, `PhoneConfirmation`, `PasswordReset` |
+| UserId | uuid null | FK Identity; obrigatório fora do convite |
+| PersonalStudentId | uuid null | FK vínculo; obrigatório no convite (`CK_PhoneVerificationCode_Scope`) |
+| PhoneE164 | varchar(20) | celular de destino, E.164 |
+| CodeHash | bytea | HMAC-SHA256 (32 bytes) do código, com finalidade e dono; chave `PhoneVerification:HashKey` |
+| ExpiresAtUtc | timestamptz | 10 minutos depois do envio |
+| Attempts | int | `0..5` |
+| ConsumedAtUtc | timestamptz null | código usado |
+| ReplacedAtUtc | timestamptz null | substituído por um código mais novo |
+| LockedUntilUtc | timestamptz null | bloqueio de 15 minutos (5 tentativas ou 4º pedido na hora) |
+
+Índices: `(PhoneE164, Purpose, CreatedAtUtc)` para os limites por celular; `(PersonalStudentId, CreatedAtUtc)` e `(UserId, Purpose, CreatedAtUtc)` para o código aberto de cada dono. Concorrência por `xmin`; conferência com `FOR UPDATE`.
+
+Migration: `AddWhatsApp` (Fase 6) cria esta tabela e completa a `NotificationOutbox`.
 
 ## 5. Estados e transições
 
@@ -331,5 +372,6 @@ WHERE pp."UserId" = @userId AND p."Status" = 'Reported';
 
 ## 9. Pontos ainda abertos
 - Prazo de retenção de dados após o fim do vínculo (P-017).
-- Provedor e fluxo de WhatsApp (P-013, P-014) e notificações internas (P-018), na Fase 6.
+- Notificações dentro da aplicação (P-018), na Fase 7. Provedor e fluxo de WhatsApp resolvidos em D-055 e D-062.
+- Retenção das linhas da outbox e dos códigos (limpeza periódica ainda não implementada).
 - Nenhuma migration deve ser criada antes da configuração da solução (Fase 0, próximo passo).
