@@ -1,0 +1,26 @@
+@* "Reenviar código": desabilitado até 60 s depois do último envio. O servidor calcula o tempo; o script só faz a
+   contagem regressiva e habilita o botão (sem JavaScript, ele habilita na próxima requisição). *@
+
+@if (Seconds > 0 && !Locked)
+{
+    <button type="submit" class="ph-btn ph-btn-outline ph-btn-block" disabled
+            data-ph-countdown="@Seconds" data-ph-countdown-label="Reenviar código" data-ph-busy-text="Enviando…">
+        <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+        <span class="ph-btn-text">Reenviar código em @PhoneCodeDisplay.Countdown(Seconds)</span>
+    </button>
+}
+else
+{
+    <button type="submit" class="ph-btn ph-btn-outline ph-btn-block" disabled="@Locked" data-ph-busy-text="Enviando…">
+        <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+        <span class="ph-btn-text">Reenviar código</span>
+    </button>
+}
+
+@code {
+    [Parameter]
+    public int Seconds { get; set; }
+
+    [Parameter]
+    public bool Locked { get; set; }
+}

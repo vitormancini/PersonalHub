@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PersonalHub.IntegrationTests.Authentication;
 using PersonalHub.IntegrationTests.Infrastructure;
+using PersonalHub.IntegrationTests.Notifications;
 using PersonalHub.IntegrationTests.Students;
 using PersonalHub.Web.Domain.Lessons;
 using PersonalHub.Web.Domain.Students;
@@ -544,8 +545,10 @@ public sealed class StudentLessonsTests(DatabaseFixture fixture) : IAsyncLifetim
         Assert.Contains("Aguardando Paula confirmar", await PageAsync(_personal.Client, $"/personal/aulas/{lesson.Id}"));
 
         var browser = _factory.CreateBrowser();
+        var proof = await browser.VerifyInvitePhoneAsync(_factory, invite.Token);
         var accepted = await browser.PostFormAsync($"/convite/{invite.Token}", "nova-conta", new Dictionary<string, string>
         {
+            ["New.PhoneProof"] = proof,
             ["New.Name"] = "Paula Reis",
             ["New.Password"] = "Aluna-Forte1",
             ["New.ConfirmPassword"] = "Aluna-Forte1",

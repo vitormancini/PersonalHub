@@ -5,6 +5,7 @@ using PersonalHub.Web.Domain.Auditing;
 using PersonalHub.Web.Domain.Billing;
 using PersonalHub.Web.Domain.Lessons;
 using PersonalHub.Web.Domain.Notifications;
+using PersonalHub.Web.Domain.PhoneVerification;
 using PersonalHub.Web.Domain.Students;
 using PersonalHub.Web.Infrastructure.Identity;
 
@@ -21,6 +22,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<BillingPeriodItem> BillingPeriodItems => Set<BillingPeriodItem>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<NotificationOutbox> NotificationOutbox => Set<NotificationOutbox>();
+    public DbSet<PhoneVerificationCode> PhoneVerificationCodes => Set<PhoneVerificationCode>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)

@@ -3,11 +3,14 @@
 @layout AuthLayout
 @attribute [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(InviteRateLimiting.Policy)]
 @using PersonalHub.Web.Domain.Students
+@using PersonalHub.Web.Features.PhoneVerification
 @inject AcceptInviteHandler Handler
 @inject NavigationManager Navigation
+@inject TimeProvider Clock
 
 @* Página pública do aluno. SSR estático: o cookie de login precisa ser gravado numa resposta HTTP.
-   O GET só mostra; aceitar exige POST com antiforgery (scanners de link abrem URLs sozinhos). *@
+   O GET só mostra; enviar código e aceitar exigem POST com antiforgery (scanners de link abrem URLs sozinhos).
+   Passos (D-057): celular → código → conta. A prova do código vai em campo oculto e é conferida de novo no POST. *@
 
 <PageTitle>Convite · PersonalHub</PageTitle>
 
@@ -18,7 +21,14 @@
             @if (_view.State == InviteState.Valid)
             {
                 <h1 class="ph-auth-hero-title">@_view.PersonalName convidou você</h1>
-                <p class="ph-auth-hero-text">Acompanhe suas aulas e o demonstrativo do mês com seu personal.</p>
+                @if (CurrentStep == Step.Account)
+                {
+                    <p class="ph-auth-hero-text">Acompanhe suas aulas e o demonstrativo do mês com seu personal.</p>
+                }
+                else
+                {
+                    <p class="ph-auth-hero-text">Primeiro, confirme que este WhatsApp é seu.</p>
+                }
             }
         </div>
     </header>
@@ -36,6 +46,65 @@
                     <p class="ph-result-text">@text</p>
                 </div>
                 <a href="/entrar" class="ph-btn ph-btn-primary ph-btn-block">Ir para o login</a>
+            }
+            else if (CurrentStep != Step.Account)
+            {
+                <div class="ph-email-box ph-phone-box">
+                    <span>WhatsApp cadastrado pelo @_view.PersonalFirstName</span>
+                    <strong>@_view.MaskedPhone</strong>
+                </div>
+
+                @if (_codeMessage is not null)
+                {
+                    <div class="ph-alert @(_codeMessageIsLock ? "ph-alert-warning" : "ph-alert-danger")" role="alert">
+                        <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+                        <p>@_codeMessage</p>
+                    </div>
+                }
+                else if (_needsCode)
+                {
+                    <div class="ph-alert ph-alert-info" role="status">
+                        <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                        <p>Confirme o código do WhatsApp para continuar.</p>
+                    </div>
+                }
+
+                @if (CurrentStep == Step.Phone)
+                {
+                    <p class="ph-consent">@PhoneCodeDisplay.Consent</p>
+                    <form method="post" @formname="@SendForm" @onsubmit="SendCodeAsync" class="ph-form" data-ph-busy-form>
+                        <AntiforgeryToken />
+                        <button type="submit" class="ph-btn ph-btn-primary ph-btn-block" data-ph-busy-text="Enviando…"
+                                disabled="@(LockedSeconds > 0)">
+                            <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <span class="ph-btn-text">Enviar código pelo WhatsApp</span>
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    <EditForm Model="Code" FormName="@CodeForm" OnSubmit="VerifyCodeAsync" novalidate class="ph-form" data-ph-busy-form>
+                        <div class="ph-field">
+                            <label for="convite-codigo" class="ph-label">Código de 6 números</label>
+                            <p id="convite-codigo-ajuda" class="ph-field-hint">Enviamos pelo WhatsApp. Vale por 10 minutos.</p>
+                            <input id="convite-codigo" name="Code.Value" class="ph-input ph-code-input" inputmode="numeric"
+                                   autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" spellcheck="false"
+                                   aria-describedby="convite-codigo-ajuda" aria-invalid="@(_codeMessage is null ? "false" : "true")" />
+                        </div>
+                        <button type="submit" class="ph-btn ph-btn-primary ph-btn-block" data-ph-busy-text="Confirmando…"
+                                disabled="@(LockedSeconds > 0)">
+                            <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <span class="ph-btn-text">Confirmar código</span>
+                        </button>
+                    </EditForm>
+
+                    <form method="post" @formname="@SendForm" @onsubmit="SendCodeAsync" class="ph-resend" data-ph-busy-form>
+                        <AntiforgeryToken />
+                        <PhoneCodeResendButton Seconds="ResendSeconds" Locked="LockedSeconds > 0" />
+                    </form>
+                }
+
+                <p class="ph-auth-note">Esse não é o seu número? Peça ao @_view.PersonalFirstName para corrigir o seu celular e enviar o convite de novo.</p>
             }
             else
             {
@@ -78,6 +147,7 @@
 
                         @* Ajuda o gerenciador de senhas a associar a senha à conta certa. *@
                         <input type="email" name="username" value="@_view.Email" autocomplete="username" hidden readonly />
+                        <input type="hidden" name="Existing.PhoneProof" value="@_proof" />
 
                         <div class="ph-field">
                             <label for="convite-senha-atual" class="ph-label">Senha</label>
@@ -109,6 +179,7 @@
                     <EditForm EditContext="_newContext" FormName="@NewForm" OnSubmit="AcceptNewAsync"
                               novalidate class="ph-form" data-ph-busy-form>
                         <input type="email" name="username" value="@_view.Email" autocomplete="username" hidden readonly />
+                        <input type="hidden" name="New.PhoneProof" value="@_proof" />
 
                         <div class="ph-field">
                             <label for="convite-nome" class="ph-label">Seu nome</label>
@@ -177,8 +248,39 @@
     [SupplyParameterFromForm(FormName = ExistingForm)]
     private ExistingAccountInput Existing { get; set; } = default!;
 
+    [SupplyParameterFromForm(FormName = CodeForm)]
+    private PhoneCodeInput Code { get; set; } = default!;
+
     private const string NewForm = "nova-conta";
     private const string ExistingForm = "conta-existente";
+    private const string SendForm = "enviar-codigo";
+    private const string CodeForm = "confirmar-codigo";
+
+    private enum Step
+    {
+        Phone,
+        Code,
+        Account
+    }
+
+    // Prova do código (vinda da confirmação agora ou do campo oculto do formulário enviado).
+    private string? _proof;
+    private string? _codeMessage;
+    private bool _codeMessageIsLock;
+    private bool _needsCode;
+
+    private DateTime Now => Clock.GetUtcNow().UtcDateTime;
+    private int ResendSeconds => PhoneCodeDisplay.SecondsUntil(_view.Code?.ResendAtUtc, Now);
+    private int LockedSeconds => PhoneCodeDisplay.SecondsUntil(_view.Code?.LockedUntilUtc, Now);
+
+    // Durante o despacho de um POST, o formulário enviado precisa estar na tela; depois, o passo segue o estado.
+    private Step CurrentStep => _postedForm switch
+    {
+        NewForm or ExistingForm => Step.Account,
+        CodeForm => Step.Code,
+        SendForm => _view.Code?.HasOpenCode == true ? Step.Code : Step.Phone,
+        _ => _proof is not null ? Step.Account : _view.Code?.HasOpenCode == true ? Step.Code : Step.Phone
+    };
 
     private InviteView _view = new(InviteState.NotFound);
 
@@ -205,15 +307,83 @@
         if (isPost && HttpContext.Request.HasFormContentType)
         {
             var posted = (await HttpContext.Request.ReadFormAsync(HttpContext.RequestAborted))["_handler"].ToString();
-            _postedForm = posted is NewForm or ExistingForm ? posted : null;
+            _postedForm = posted is NewForm or ExistingForm or SendForm or CodeForm ? posted : null;
         }
 
-        New ??= new NewAccountInput { Name = isPost ? null : _view.StudentName };
+        New ??= new NewAccountInput { Name = _postedForm == NewForm ? null : _view.StudentName };
         Existing ??= new ExistingAccountInput();
+        Code ??= new PhoneCodeInput();
+        _proof = _postedForm switch
+        {
+            NewForm => New.PhoneProof,
+            ExistingForm => Existing.PhoneProof,
+            _ => null
+        };
+        ShowLock();
         _newContext = new EditContext(New);
         _newMessages = new ValidationMessageStore(_newContext);
         _existingContext = new EditContext(Existing);
         _existingMessages = new ValidationMessageStore(_existingContext);
+    }
+
+    private async Task SendCodeAsync()
+    {
+        var result = await Handler.SendCodeAsync(Token, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+        _postedForm = null;
+        if (result.State != InviteState.Valid)
+        {
+            _view = new InviteView(result.State);
+            return;
+        }
+
+        _view = await Handler.GetAsync(Token, HttpContext.RequestAborted);
+        if (result.Send?.Outcome == PhoneCodeSendOutcome.Locked)
+        {
+            ShowLock(result.Send.RetryAtUtc);
+        }
+    }
+
+    private async Task VerifyCodeAsync()
+    {
+        var result = await Handler.VerifyCodeAsync(Token, Code.Value, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+        _postedForm = null;
+        if (result.State != InviteState.Valid)
+        {
+            _view = new InviteView(result.State);
+            return;
+        }
+
+        _view = await Handler.GetAsync(Token, HttpContext.RequestAborted);
+        var verify = result.Verify!;
+        switch (verify.Outcome)
+        {
+            case PhoneCodeVerifyOutcome.Verified:
+                _proof = result.Proof;
+                New.Name ??= _view.StudentName;
+                return;
+            case PhoneCodeVerifyOutcome.Wrong:
+                _codeMessage = PhoneCodeDisplay.Wrong(verify.RemainingAttempts);
+                return;
+            case PhoneCodeVerifyOutcome.Locked:
+                ShowLock(verify.LockedUntilUtc);
+                return;
+            case PhoneCodeVerifyOutcome.Expired:
+                _codeMessage = PhoneCodeDisplay.Expired + " Peça um código novo.";
+                return;
+            default:
+                _codeMessage = PhoneCodeDisplay.Invalid;
+                return;
+        }
+    }
+
+    private void ShowLock(DateTime? untilUtc = null)
+    {
+        var until = untilUtc ?? _view.Code?.LockedUntilUtc;
+        if (until > Now)
+        {
+            _codeMessage = PhoneCodeDisplay.Locked(until.Value, Now);
+            _codeMessageIsLock = true;
+        }
     }
 
     private async Task AcceptNewAsync()
@@ -246,6 +416,12 @@
                 return;
             case AcceptInviteOutcome.AlreadyLinked:
                 _alreadyLinked = true;
+                return;
+            case AcceptInviteOutcome.PhoneNotVerified:
+                _proof = null;
+                _needsCode = true;
+                _view = await Handler.GetAsync(Token, HttpContext.RequestAborted);
+                ShowLock();
                 return;
             case AcceptInviteOutcome.InvalidCredentials or AcceptInviteOutcome.LockedOut:
                 _loginOutcome = result.Outcome;

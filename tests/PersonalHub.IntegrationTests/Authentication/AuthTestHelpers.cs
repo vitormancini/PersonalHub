@@ -16,13 +16,25 @@ public static partial class AuthTestHelpers
     public const string Password = "Senha-Forte1";
 
     /// <summary>Cria uma conta pelo UserManager (bloqueio habilitado como em produção) com a role pedida.</summary>
+    /// <remarks>
+    /// Alunos nascem com celular confirmado, como quem aceitou o convite na Fase 6; <paramref name="phoneConfirmed"/>
+    /// falso simula o aluno que aceitou antes (D-059).
+    /// </remarks>
     public static async Task<TestAccount> CreateAccountAsync(
-        this WebApplicationFactory<Program> factory, string role, bool personalActive = true)
+        this WebApplicationFactory<Program> factory, string role, bool personalActive = true, bool? phoneConfirmed = null)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var email = $"conta-{Guid.NewGuid():N}@example.test";
-        var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = email, Email = email };
+        var confirmed = phoneConfirmed ?? role == AppRoles.Student;
+        var user = new ApplicationUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = email,
+            Email = email,
+            PhoneNumber = confirmed ? "+55" + Students.StudentTestHelpers.RandomPhone() : null,
+            PhoneNumberConfirmed = confirmed
+        };
 
         AssertSucceeded(await users.CreateAsync(user, Password));
         AssertSucceeded(await users.AddToRoleAsync(user, role));

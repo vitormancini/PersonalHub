@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using PersonalHub.Web.Domain.Auditing;
+using PersonalHub.Web.Domain.PhoneVerification;
 using PersonalHub.Web.Domain.Students;
+using PersonalHub.Web.Features.PhoneVerification;
 using PersonalHub.Web.Infrastructure.Identity;
 using PersonalHub.Web.Infrastructure.Persistence;
 
@@ -15,7 +17,20 @@ public sealed record InviteView(
     string? PersonalName = null,
     string? StudentName = null,
     string? Email = null,
-    bool HasAccount = false);
+    bool HasAccount = false,
+    string? MaskedPhone = null,
+    PhoneCodeStatus? Code = null)
+{
+    /// <summary>"Carlos", para "WhatsApp cadastrado pelo Carlos".</summary>
+    public string PersonalFirstName => PhoneCodeDisplay.FirstName(PersonalName ?? string.Empty);
+}
+
+/// <summary>Resultado de pedir ou conferir o código do convite. <see cref="Proof"/> só quando confirmado.</summary>
+public sealed record InviteCodeResult(
+    InviteState State,
+    PhoneCodeSendResult? Send = null,
+    PhoneCodeVerifyResult? Verify = null,
+    string? Proof = null);
 
 public enum AcceptInviteOutcome
 {
@@ -32,7 +47,10 @@ public enum AcceptInviteOutcome
     LockedOut,
 
     /// <summary>A conta já está ligada a outro vínculo deste personal (por exemplo, um vínculo encerrado).</summary>
-    AlreadyLinked
+    AlreadyLinked,
+
+    /// <summary>O formulário chegou sem a prova do código do WhatsApp (ou ela venceu): volta para o passo do código.</summary>
+    PhoneNotVerified
 }
 
 public sealed record AcceptInviteResult(
@@ -45,7 +63,9 @@ public sealed record AcceptInviteResult(
 }
 
 /// <summary>
-/// Aceite do convite (D-016). Numa transação: marca o convite como usado com um UPDATE condicional (dois
+/// Aceite do convite (D-016, D-057). Antes do formulário, o aluno confirma com um código enviado por WhatsApp ao celular
+/// que o personal cadastrou; o personal não vê o código. A prova do código é conferida de novo no envio do formulário.
+/// Numa transação: marca o convite como usado com um UPDATE condicional (dois
 /// aceites simultâneos não vencem os dois), cria ou reaproveita a conta, garante a role Student, ativa o
 /// vínculo e audita. O login só acontece depois do commit. O token nunca vai para log nem auditoria.
 /// </summary>
@@ -53,6 +73,8 @@ public sealed partial class AcceptInviteHandler(
     AppDbContext db,
     UserManager<ApplicationUser> userManager,
     SignInManager<ApplicationUser> signInManager,
+    PhoneCodeService codes,
+    InvitePhoneProof proofs,
     TimeProvider clock,
     ILogger<AcceptInviteHandler> logger)
 {
@@ -69,6 +91,7 @@ public sealed partial class AcceptInviteHandler(
         bool PersonalActive,
         string StudentName,
         string StudentEmail,
+        string StudentPhone,
         string PersonalName);
 
     public async Task<InviteView> GetAsync(string? token, CancellationToken cancellationToken)
@@ -81,8 +104,47 @@ public sealed partial class AcceptInviteHandler(
         }
 
         var hasAccount = await userManager.FindByEmailAsync(row!.StudentEmail) is not null;
-        return new InviteView(state, row.PersonalName, row.StudentName, row.StudentEmail, hasAccount);
+        var code = await codes.GetStatusAsync(Scope(row), cancellationToken);
+        return new InviteView(state, row.PersonalName, row.StudentName, row.StudentEmail, hasAccount,
+            PhoneCodeRules.Mask(row.StudentPhone), code);
     }
+
+    /// <summary>"Enviar código pelo WhatsApp": abrir o link não envia nada; só este POST envia.</summary>
+    public async Task<InviteCodeResult> SendCodeAsync(string? token, string? correlationId, CancellationToken cancellationToken)
+    {
+        var row = await FindAsync(token, cancellationToken);
+        var state = StateOf(row);
+        if (state != InviteState.Valid)
+        {
+            return new InviteCodeResult(state);
+        }
+
+        var sent = await codes.SendAsync(Scope(row!), recipientUserId: null, correlationId, cancellationToken);
+        return new InviteCodeResult(state, Send: sent);
+    }
+
+    public async Task<InviteCodeResult> VerifyCodeAsync(
+        string? token, string? code, string? correlationId, CancellationToken cancellationToken)
+    {
+        var row = await FindAsync(token, cancellationToken);
+        var state = StateOf(row);
+        if (state != InviteState.Valid)
+        {
+            return new InviteCodeResult(state);
+        }
+
+        var verify = await codes.VerifyAsync(Scope(row!), code, correlationId, cancellationToken);
+        var proof = verify.Outcome == PhoneCodeVerifyOutcome.Verified
+            ? proofs.Create(row!.InviteId, row.StudentPhone, clock.GetUtcNow().UtcDateTime)
+            : null;
+        return new InviteCodeResult(state, Verify: verify, Proof: proof);
+    }
+
+    private static PhoneCodeScope Scope(InviteRow row) =>
+        new(PhoneCodePurpose.InviteAcceptance, row.StudentPhone, PersonalStudentId: row.PersonalStudentId);
+
+    private bool HasProof(InviteRow row, string? proof) =>
+        proofs.IsValid(proof, row.InviteId, row.StudentPhone, clock.GetUtcNow().UtcDateTime);
 
     public async Task<AcceptInviteResult> AcceptWithNewAccountAsync(
         string? token, NewAccountInput input, string? correlationId, CancellationToken cancellationToken)
@@ -92,6 +154,11 @@ public sealed partial class AcceptInviteHandler(
         if (state != InviteState.Valid)
         {
             return AcceptInviteResult.Of(AcceptInviteOutcome.InviteUnavailable, state);
+        }
+
+        if (!HasProof(row!, input.PhoneProof))
+        {
+            return AcceptInviteResult.Of(AcceptInviteOutcome.PhoneNotVerified);
         }
 
         if (await userManager.FindByEmailAsync(row!.StudentEmail) is not null)
@@ -107,7 +174,10 @@ public sealed partial class AcceptInviteHandler(
             Email = row.StudentEmail,
             FullName = name,
             // Quem abriu o link recebeu o convite pelo WhatsApp, não pelo e-mail: o e-mail não foi provado.
-            EmailConfirmed = false
+            EmailConfirmed = false,
+            // O celular foi provado pelo código (D-057).
+            PhoneNumber = row.StudentPhone,
+            PhoneNumberConfirmed = true
         };
 
         var errors = await ValidateNewAccountAsync(user, name, input);
@@ -160,6 +230,12 @@ public sealed partial class AcceptInviteHandler(
         if (state != InviteState.Valid)
         {
             return AcceptInviteResult.Of(AcceptInviteOutcome.InviteUnavailable, state);
+        }
+
+        // Antes da senha: sem a prova do código, não conta tentativa de senha nem aceita nada.
+        if (!HasProof(row!, input.PhoneProof))
+        {
+            return AcceptInviteResult.Of(AcceptInviteOutcome.PhoneNotVerified);
         }
 
         var errors = new Dictionary<string, string>();
@@ -303,6 +379,10 @@ public sealed partial class AcceptInviteHandler(
             }
         }
 
+        // Conta existente: o celular confirmado passa a ser o deste convite (o salvamento abaixo grava junto).
+        user.PhoneNumber = row.StudentPhone;
+        user.PhoneNumberConfirmed = true;
+
         var now = clock.GetUtcNow().UtcDateTime;
         int updated;
         try
@@ -336,7 +416,7 @@ public sealed partial class AcceptInviteHandler(
             EntityId = row.PersonalStudentId,
             OccurredAtUtc = now,
             CorrelationId = correlationId,
-            Metadata = JsonSerializer.Serialize(new { inviteId = row.InviteId, termsAccepted = true, newAccount }),
+            Metadata = JsonSerializer.Serialize(new { inviteId = row.InviteId, termsAccepted = true, newAccount, phoneVerified = true }),
             CreatedAtUtc = now
         });
         await db.SaveChangesAsync(cancellationToken);
@@ -377,7 +457,8 @@ public sealed partial class AcceptInviteHandler(
 
     private static readonly System.Linq.Expressions.Expression<Func<JoinedRow, InviteRow?>> Project = r => new InviteRow(
         r.Invite.Id, r.Link.Id, r.Personal.Id, r.Invite.ExpiresAtUtc, r.Invite.UsedAtUtc, r.Invite.RevokedAtUtc,
-        r.Link.Status, r.Personal.IsActive, r.Link.StudentName, r.Link.StudentEmail, r.Personal.DisplayName);
+        r.Link.Status, r.Personal.IsActive, r.Link.StudentName, r.Link.StudentEmail, r.Link.StudentPhone,
+        r.Personal.DisplayName);
 
     [LoggerMessage(EventId = 3100, Level = LogLevel.Information,
         Message = "Convite do vínculo {PersonalStudentId} aceito pelo usuário {UserId} (conta nova: {NewAccount})")]

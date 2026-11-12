@@ -35,10 +35,10 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 | D-027 | Admin | Personal provisionado por script de linha de comando versionado (resolve P-016) |
 | D-028 | Fim do vínculo | Vínculo inativado, sem apagar histórico (resolve P-017 em parte) |
 | D-029 | Modelo de dados | Modelo relacional descrito em `DOMAIN_AND_DATABASE.md` |
-| D-030 | Recuperação de senha | Via WhatsApp na Fase 6; sem link no login até lá |
+| D-030 | Recuperação de senha | Via WhatsApp na Fase 6; sem link no login até lá (cumprida em D-058) |
 | D-031 | Envio do convite | Pelo WhatsApp do próprio personal (link wa.me com mensagem pronta) até a Fase 6 |
 | D-032 | Nome do aluno na conta | Coluna `FullName` em `AspNetUsers`, preenchida pelo aluno no aceite |
-| D-033 | Aceite do convite | Na Fase 6, exige código de uso único enviado por WhatsApp ao celular do aluno; risco aceito no MVP |
+| D-033 | Aceite do convite | Na Fase 6, exige código de uso único enviado por WhatsApp ao celular do aluno; risco aceito no MVP (cumprida em D-057) |
 | D-034 | Reenvio do convite | Gera novo link e revoga o anterior na hora; há também "Cancelar convite" sem gerar outro |
 | D-035 | E-mail do aluno | Editável só enquanto `Invited` (trocar revoga o convite); depois do aceite é o login e fica somente leitura |
 | D-036 | Alteração de valor e vencimento | Valor novo vale para aulas registradas a partir da alteração; vencimento novo, a partir do próximo demonstrativo |
@@ -48,12 +48,27 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 | D-040 | Possível duplicada | Mesmo vínculo, data e horário mostra aviso e exige "Registrar mesmo assim"; não bloqueia |
 | D-041 | Aula não editável | Correção = excluir e registrar outra; o aluno responde uma única vez |
 | D-042 | Exclusão lógica da aula | Pendente: motivo opcional e some para o aluno; respondida: motivo obrigatório e o aluno vê "Excluída" com o motivo |
+| D-043 | Fechamento do demonstrativo | No vencimento (00:00 de São Paulo) emite o mês anterior com as aulas `Approved` ainda não cobradas; pendentes ficam de fora |
+| D-044 | Mês sem cobrança e total zero | Sem aula nem crédito, não emite; créditos que zeram o total emitem já `Paid` e levam o saldo adiante |
+| D-045 | Crédito por aula excluída depois de cobrada | Item `Adjustment` negativo no próximo demonstrativo; o emitido nunca muda |
+| D-046 | Vínculo inativo | Ainda fecha no próximo vencimento o que estiver pendente de cobrança |
+| D-047 | Agendamento do fechamento | `BackgroundService` a cada hora, idempotente, com advisory lock; comando `close-billing` |
+| D-048 | Rótulos do demonstrativo | `Issued` = "Aguardando pagamento", `Paid` = "Pago" (`BillingDisplay`) |
 | D-049 | Aluno informa pagamento | Valor total do demonstrativo `Issued`, sem pagamento ativo; observação opcional até 500; período vai para "Pagamento informado" |
 | D-050 | Confirmação | Pela lista do Financeiro ou pelo detalhe; `Payment` `Confirmed` e período `Paid` na mesma transação |
 | D-051 | "Não recebi" | `Payment` `Rejected` com mensagem opcional (até 500, visível ao aluno); período volta a `Issued` e o aluno pode informar de novo |
 | D-052 | Registro direto | Personal marca como pago um demonstrativo `Issued` sem aviso do aluno (`Payment` `Confirmed` registrado pelo personal) |
 | D-053 | Histórico do pagamento | Demonstrativo mostra emitido, informado(s), recusado(s) e confirmado; confirmação definitiva |
 | D-054 | Avisos de pagamento | WhatsApp de informado/confirmado/recusado fica para a Fase 6; até lá, pendências no Financeiro |
+| D-055 | Provedor de WhatsApp | Meta WhatsApp Cloud API direta, sem intermediário; templates em `pt_BR` (resolve P-013) |
+| D-056 | Código por WhatsApp | 6 dígitos, 10 minutos, 5 tentativas; reenvio após 60 s; até 3 envios por hora por celular; bloqueio de 15 minutos |
+| D-057 | Aceite do convite com código | Código ao celular cadastrado pelo personal antes de criar a conta ou aceitar com conta existente; confirma o celular da conta (fecha D-033) |
+| D-058 | Recuperação de senha | "Esqueci minha senha" com código no celular confirmado; resposta sempre igual; troca o security stamp (fecha D-030) |
+| D-059 | Alunos de antes da Fase 6 | Confirmam o celular do vínculo mais recente logo após o login, antes de usar o app |
+| D-060 | Conteúdo das mensagens | Nenhum texto livre digitado por usuário vai no WhatsApp; a mensagem avisa e leva ao app |
+| D-061 | Horário de silêncio | Avisos entre 22:00 e 08:00 (São Paulo) saem às 08:00; códigos saem na hora |
+| D-062 | Botão e retentativas | Todo aviso tem botão de URL para a tela certa; até 5 tentativas (1 min, 5 min, 30 min, 2 h) e depois `Failed` (resolve P-014) |
+| D-063 | Envio do convite | Continua pelo WhatsApp do próprio personal (wa.me), como em D-031 |
 
 ## Pendências que exigem decisão
 
@@ -71,12 +86,12 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 | P-010 | Pagamento | Permitir pagamento parcial ou múltiplos pagamentos? | Resolvida em D-024 |
 | P-011 | Vencimento | Regra para dias 29, 30 e 31 em meses curtos? | Resolvida em D-025 |
 | P-012 | Fuso | Confirmar `America/Sao_Paulo` como fuso do MVP. | Resolvida em D-026 |
-| P-013 | WhatsApp | Qual provedor será utilizado? | Aberta (Fase 6) |
-| P-014 | WhatsApp | Como validar reconhecimento via WhatsApp: link autenticado, resposta ou ambos? | Aberta (Fase 6) |
+| P-013 | WhatsApp | Qual provedor será utilizado? | Resolvida em D-055 |
+| P-014 | WhatsApp | Como validar reconhecimento via WhatsApp: link autenticado, resposta ou ambos? | Resolvida em D-062: o botão abre o app logado; a ação acontece só no app |
 | P-015 | Convites | Como o aluno recebe credenciais/acesso inicial? | Resolvida em D-016 |
 | P-016 | Admin | Provisionamento de personal por SQL/seed/script ou ferramenta administrativa mínima? | Resolvida em D-027 |
 | P-017 | Exclusão | Aluno e personal podem encerrar vínculo? Qual política de retenção? | Parcial em D-028; prazo de retenção ainda aberto |
-| P-018 | Notificação | Quais eventos também terão notificação dentro da aplicação? | Aberta (Fase 6) |
+| P-018 | Notificação | Quais eventos também terão notificação dentro da aplicação? | Aberta (Fase 7): a Fase 6 só envia WhatsApp; as pendências continuam no Início e no Financeiro |
 
 ## Registro detalhado
 
@@ -411,6 +426,72 @@ Use este documento para registrar decisões aprovadas. Não apagar decisões ant
 - Data: 2026-11-10
 - Estado: Aprovada
 - Decisão: avisos por WhatsApp de pagamento informado, confirmado e recusado ficam para a Fase 6. Até lá o personal vê as pendências no Financeiro e no Início.
+- Aprovado por: Vítor Mancini
+
+### D-055 — Provedor de WhatsApp
+- Data: 2026-11-12
+- Estado: Aprovada
+- Contexto: P-013; a Fase 6 precisa de um provedor para avisos e códigos.
+- Decisão: Meta WhatsApp Cloud API direta, sem intermediário (BSP). Mensagens só por template aprovado, idioma `pt_BR`.
+- Alternativas consideradas: provedores intermediários (Twilio, Zenvia, Gupshup).
+- Consequências: adapter `MetaCloudWhatsAppSender` atrás de `IWhatsAppSender`; `LogWhatsAppSender` (padrão em Development) só registra no log. Os 9 templates de `WHATSAPP_TEMPLATES.md` precisam estar aprovados na Meta antes do uso. O provider `Log` não sobe em Production.
+- Aprovado por: Vítor Mancini
+
+### D-056 — Código de uso único por WhatsApp
+- Data: 2026-11-12
+- Estado: Aprovada
+- Decisão: 6 dígitos, válido por 10 minutos, no máximo 5 tentativas. Reenvio liberado 60 s depois do último envio; até 3 envios por hora por celular. Estourado um limite, o fluxo fica bloqueado por 15 minutos.
+- Consequências: tabela `PhoneVerificationCode` com HMAC-SHA256 do código (chave `PhoneVerification:HashKey`), nunca o código. Interpretação registrada na implementação: o bloqueio pelo limite de envios começa no pedido do 4º código dentro da hora; o de tentativas, na 5ª errada. Novo código substitui o anterior. Envio e conferência serializados por celular (advisory lock) e pelo código (`FOR UPDATE`), então pedidos em paralelo não furam os limites.
+- Aprovado por: Vítor Mancini
+
+### D-057 — Aceite do convite com código (fecha D-033)
+- Data: 2026-11-12
+- Estado: Aprovada
+- Decisão: antes do formulário da conta, o aluno confirma um código enviado ao celular cadastrado pelo personal (`PersonalStudent.StudentPhone`). Abrir o link não envia nada: o aluno toca em "Enviar código pelo WhatsApp". Vale para conta nova e para quem já tem conta. Com sucesso, `AspNetUsers.PhoneNumber` recebe o celular e `PhoneNumberConfirmed = true`.
+- Alternativas consideradas: manter o aceite só com o link; confirmar por e-mail.
+- Consequências: a prova do código é um valor protegido pelo Data Protection, preso ao convite e ao celular, válido por 15 minutos, conferido de novo no POST do formulário. Trocar o celular do vínculo ou gerar novo convite invalida a prova. O personal não vê o código. O risco aceito de D-033 deixa de existir.
+- Aprovado por: Vítor Mancini
+
+### D-058 — Recuperação de senha por WhatsApp (fecha D-030)
+- Data: 2026-11-12
+- Estado: Aprovada
+- Decisão: link "Esqueci minha senha" no login. `/esqueci-senha` pede o e-mail e responde sempre igual. O código vai ao celular confirmado da conta (ou ao celular do perfil, no caso do personal). `/nova-senha` recebe o código e a nova senha (mesmas regras do convite). Com sucesso: token de troca gerado no servidor, `ResetPasswordAsync`, `UpdateSecurityStampAsync` e volta ao login com "Senha alterada. Entre com a nova senha.".
+- Consequências: o e-mail vai de uma página para a outra num valor protegido (30 minutos), não em texto. O cookie confere o security stamp a cada minuto, então as outras sessões caem em até 1 minuto. O bloqueio de login por tentativas é zerado na troca. Quem não tem celular confirmado não recebe código (fala com o suporte).
+- Aprovado por: Vítor Mancini
+
+### D-059 — Alunos que aceitaram antes da Fase 6
+- Data: 2026-11-12
+- Estado: Aprovada
+- Decisão: sem celular confirmado, o aluno é levado a `/aluno/confirmar-celular` depois do login e só usa a área do aluno após confirmar, com o mesmo fluxo de código, no `StudentPhone` do vínculo mais recente.
+- Consequências: o cookie de login carrega se o celular está confirmado (claim), então a exigência não consulta o banco a cada página. Conta que também é personal usa a área do personal normalmente.
+- Aprovado por: Vítor Mancini
+
+### D-060 — Sem texto livre no WhatsApp
+- Data: 2026-11-12
+- Estado: Aprovada
+- Decisão: motivos, observações e mensagens digitados por usuários nunca vão para o WhatsApp. A mensagem diz que há algo para ver e leva ao app.
+- Consequências: variáveis dos templates são nomes, datas, horários, mês e valores; sem quebra de linha (sanitizadas). Nomes: o personal vê o aluno por `PersonalStudent.StudentName` (D-015); o aluno vê o personal por `PersonalProfile.DisplayName`.
+- Aprovado por: Vítor Mancini
+
+### D-061 — Horário de silêncio
+- Data: 2026-11-12
+- Estado: Aprovada
+- Decisão: avisos que sairiam entre 22:00 e 08:00 de São Paulo são agendados para 08:00. Códigos saem na hora.
+- Consequências: vale também para as retentativas. Um demonstrativo emitido à 00:00 sai às 08:00.
+- Aprovado por: Vítor Mancini
+
+### D-062 — Botão para o app e retentativas
+- Data: 2026-11-12
+- Estado: Aprovada
+- Contexto: P-014.
+- Decisão: todo aviso tem um botão de URL para a tela certa (base `App:PublicBaseUrl`). Falhas passageiras são repetidas até 5 tentativas, com espera crescente (1 min, 5 min, 30 min, 2 h); depois o aviso fica `Failed` e é auditado. A ação (confirmar, pagar) acontece só dentro do app, com login.
+- Consequências: o webhook da Meta (assinado) registra entregue/lido/falhou por mensagem, sem reenviar. Falha definitiva (número sem WhatsApp, template recusado) não é repetida. Avisos sem celular confirmado são encerrados como `sem-celular`.
+- Aprovado por: Vítor Mancini
+
+### D-063 — Envio do convite
+- Data: 2026-11-12
+- Estado: Aprovada
+- Decisão: o link do convite continua indo pelo WhatsApp do próprio personal (wa.me), como em D-031. O PersonalHub só envia o código e os avisos.
 - Aprovado por: Vítor Mancini
 
 ## Modelo para novas decisões

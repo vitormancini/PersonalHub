@@ -53,18 +53,20 @@ A sequência é uma proposta. O agente deve validar dependências e obter aprova
   Critério: período só muda para pago após confirmação do personal.
 
 ## Fase 6 — WhatsApp
-- [ ] Comparar provedores e escolher um com aprovação.
-- [ ] Implementar adapter.
-- [ ] Implementar outbox e worker.
-- [ ] Notificar nova aula.
-- [ ] Notificar personal de aprovação/recusa.
-- [ ] Notificar aluno sobre exclusão relevante.
-- [ ] Notificar aluno no vencimento com demonstrativo.
-- [ ] Notificar personal quando aluno informar pagamento.
-- [ ] Notificar aluno quando o personal confirmar ou recusar ("Não recebi") o pagamento (D-054).
-- [ ] Implementar webhooks/links seguros se necessários.
-- [ ] Exigir código de uso único, enviado por WhatsApp ao celular do aluno, no aceite do convite (D-033).
+- [x] Comparar provedores e escolher um com aprovação (2026-11-12): Meta WhatsApp Cloud API direta (D-055).
+- [x] Implementar adapter (2026-11-12): `IWhatsAppSender` com Meta e Log; templates em `WHATSAPP_TEMPLATES.md`.
+- [x] Implementar outbox e worker (2026-11-12): `SKIP LOCKED`, lease, backoff, silêncio 22h–8h (D-061, D-062).
+- [x] Notificar nova aula (2026-11-12): `ph_nova_aula`.
+- [x] Notificar personal de aprovação/recusa (2026-11-12): `ph_aula_confirmada`, `ph_aula_recusada`.
+- [x] Notificar aluno sobre exclusão relevante (2026-11-12): `ph_aula_excluida`, só para aula já respondida.
+- [x] Notificar aluno no vencimento com demonstrativo (2026-11-12): `ph_demonstrativo_emitido`, junto com o fechamento.
+- [x] Notificar personal quando aluno informar pagamento (2026-11-12): `ph_pagamento_informado`.
+- [x] Notificar aluno quando o personal confirmar ou recusar ("Não recebi") o pagamento (2026-11-12): `ph_pagamento_confirmado`, `ph_pagamento_nao_recebido` (D-054).
+- [x] Implementar webhooks/links seguros se necessários (2026-11-12): webhook com assinatura `X-Hub-Signature-256`; botões levam ao app logado.
+- [x] Exigir código de uso único, enviado por WhatsApp ao celular do aluno, no aceite do convite (2026-11-12): D-056, D-057.
+- [x] Recuperação de senha por WhatsApp (2026-11-12): D-058; alunos antigos confirmam o celular (D-059).
   Critério: falhas, retries, duplicidade e auditoria testados.
+  Pendente fora do código: conta da Meta liberada, 9 templates aprovados e segredos configurados (README, "Configurar WhatsApp").
 
 ## Fase 7 — Dashboard e acabamento
 - [ ] Home do personal com aulas, pendências e faturamento.

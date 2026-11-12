@@ -1,4 +1,5 @@
 using PersonalHub.Web.Domain.Lessons;
+using PersonalHub.Web.Features.Notifications;
 using PersonalHub.Web.Infrastructure.Persistence;
 
 namespace PersonalHub.Web.Features.Lessons.DeleteLesson;
@@ -57,6 +58,7 @@ public sealed partial class DeleteLessonHandler(AppDbContext db, TimeProvider cl
         lesson.Delete(personalUserId, text, now);
         db.AddLessonAudit(personalUserId, "LessonDeleted", lesson.Id, now, correlationId,
             new { status = status.ToString(), hasReason = text is not null });
+        await db.LessonDeletedAsync(lesson, now, cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

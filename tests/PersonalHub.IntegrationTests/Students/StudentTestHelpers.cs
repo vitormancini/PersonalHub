@@ -43,7 +43,8 @@ public static partial class StudentTestHelpers
 
     /// <summary>Cria o vínculo e o convite pelo handler, como o personal faria, e devolve o token puro.</summary>
     public static async Task<CreatedInvite> CreateInviteAsync(
-        this WebApplicationFactory<Program> factory, Guid personalUserId, string? email = null, string name = "Mariana Lopes")
+        this WebApplicationFactory<Program> factory, Guid personalUserId, string? email = null, string name = "Mariana Lopes",
+        string? phone = null)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var handler = scope.ServiceProvider.GetRequiredService<CreateStudentHandler>();
@@ -52,7 +53,8 @@ public static partial class StudentTestHelpers
         {
             Name = name,
             Email = email,
-            Phone = "11987654321",
+            // Celular aleatório por padrão: os limites de envio de código contam por celular (D-056).
+            Phone = phone ?? RandomPhone(),
             LessonPrice = "80",
             BillingDueDay = "10"
         }, "teste"), CancellationToken.None);
@@ -60,6 +62,9 @@ public static partial class StudentTestHelpers
         Assert.Equal(CreateStudentOutcome.Succeeded, result.Outcome);
         return new CreatedInvite(result.PersonalStudentId!.Value, result.InviteToken!, email.Trim().ToLowerInvariant());
     }
+
+    /// <summary>Celular brasileiro válido e aleatório ("119" + 8 dígitos).</summary>
+    public static string RandomPhone() => "119" + Random.Shared.Next(10_000_000, 99_999_999);
 
     public static async Task<T> WithDbAsync<T>(this WebApplicationFactory<Program> factory, Func<AppDbContext, Task<T>> action)
     {

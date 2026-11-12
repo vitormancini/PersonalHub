@@ -1945,3 +1945,79 @@ a.ph-item-title:hover {
     border: 1px solid var(--ph-info-border);
     border-radius: 12px;
 }
+
+/* ---------- Códigos por WhatsApp (Fase 6) ---------- */
+
+.ph-login-options {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+}
+
+.ph-login-forgot {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ph-primary);
+}
+
+.ph-phone-box strong {
+    font-size: 20px;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+}
+
+.ph-consent {
+    margin: 0 0 16px;
+    font-size: 14px;
+    color: var(--ph-text-muted);
+}
+
+.ph-code-input {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.4em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.ph-resend {
+    margin-top: 12px;
+}
+
+.ph-resend .ph-btn[disabled] {
+    color: var(--ph-text-muted);
+    border-color: var(--ph-border);
+    background: var(--ph-background);
+    opacity: 1;
+}
+
+.ph-text-center {
+    text-align: center;
+}
+
+.ph-link-form {
+    margin: 8px 0 0;
+    text-align: center;
+}
+
+.ph-link-button {
+    min-height: 44px;
+    padding: 8px 16px;
+    font: inherit;
+    font-weight: 700;
+    color: var(--ph-primary);
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.ph-link-button:focus-visible {
+    outline: 3px solid var(--ph-focus);
+    outline-offset: 2px;
+    border-radius: 8px;
+}

@@ -60,7 +60,7 @@ public sealed class EditStudentTests(DatabaseFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Get_PrefillsCurrentDataInBrazilianFormat()
     {
-        var invite = await _factory.CreateInviteAsync(_personal.Account.Id);
+        var invite = await _factory.CreateInviteAsync(_personal.Account.Id, phone: "11987654321");
 
         var (_, _, html) = await OpenAsync(invite.PersonalStudentId);
 
@@ -158,7 +158,8 @@ public sealed class EditStudentTests(DatabaseFixture fixture) : IAsyncLifetime
         Assert.Contains("Novo link para Mariana Lopes Silva", page);
         Assert.Equal(newEmail.ToLowerInvariant(), (await _factory.LinkAsync(invite.PersonalStudentId)).StudentEmail);
         Assert.Contains("Convite não encontrado", await _factory.InvitePageTextAsync(invite.Token));
-        Assert.Contains(newEmail.ToLowerInvariant(), await _factory.InvitePageTextAsync(newToken));
+        // O novo link abre o convite (o e-mail aparece depois do código do WhatsApp, D-057).
+        Assert.Contains("Enviar código pelo WhatsApp", await _factory.InvitePageTextAsync(newToken));
         Assert.Equal(1, (await _factory.InvitesAsync(invite.PersonalStudentId)).Count(i => i.RevokedAtUtc is null));
     }
 

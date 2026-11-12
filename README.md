@@ -100,7 +100,8 @@ Regras de acesso:
 O personal cadastra o aluno em **Alunos → Novo aluno** (`/personal/alunos/novo`). O vínculo nasce `Invited` e o sistema gera um convite de uso único, válido por 7 dias (D-016):
 - O link (`/convite/{token}`) aparece **uma única vez**, na página seguinte ao cadastro. O banco guarda só o SHA-256 do token. Recarregar a página não mostra o link de novo.
 - O botão **Enviar pelo WhatsApp** abre o WhatsApp do próprio personal com a mensagem pronta (`wa.me`, D-031). O PersonalHub não envia nada sozinho.
-- O aluno abre o link, cria a senha (ou entra com a senha atual, se o e-mail já tiver conta), aceita os termos e cai em `/aluno`.
+- O aluno abre o link (nada é enviado só por abrir), toca em **Enviar código pelo WhatsApp**, digita o código de 6 números que chega no celular cadastrado pelo personal e só então cria a senha (ou entra com a senha atual, se o e-mail já tiver conta), aceita os termos e cai em `/aluno` (D-057). O celular passa a ser o confirmado da conta.
+- Alunos que aceitaram antes da Fase 6 confirmam o celular em `/aluno/confirmar-celular` logo após o login (D-059).
 - O caminho `/convite/*` é limitado a 20 requisições por minuto por IP (`Students:InviteRateLimit`), responde com `Referrer-Policy: no-referrer` e aparece nos logs como `/convite/[redacted]`.
 
 ## Demonstrativo e fechamento mensal
@@ -131,22 +132,78 @@ O aluno paga direto ao personal (Pix, dinheiro…) e avisa pelo app; o personal 
 - Personal: **Pagamentos para confirmar** no topo do Financeiro (todos os meses) com **Confirmar** (direto) e **Não recebi** (`/personal/financeiro/{id}/nao-recebi`, mensagem opcional que o aluno vê). Recusado, o demonstrativo volta a "Aguardando pagamento" e o aluno pode informar de novo.
 - Sem aviso do aluno (ex.: dinheiro), o personal usa **Registrar recebimento** no demonstrativo (`/registrar`).
 - Confirmação e registro são definitivos. Cada transição trava o demonstrativo (`SELECT ... FOR UPDATE`) e grava `AuditLog` (`PaymentReported`, `PaymentConfirmed`, `PaymentRejected`, `PaymentRecorded`) sem os textos livres.
-- Avisos por WhatsApp desses eventos ficam para a Fase 6 (D-054).
+- Avisos por WhatsApp desses eventos: veja "WhatsApp" abaixo.
+
+## WhatsApp
+
+O PersonalHub envia por WhatsApp os códigos de verificação e os avisos de aulas, demonstrativo e pagamentos (D-055 a D-063). Os textos e variáveis dos 9 templates estão em [`.claude/docs/WHATSAPP_TEMPLATES.md`](.claude/docs/WHATSAPP_TEMPLATES.md).
+
+- Cada aviso é gravado na outbox (`NotificationOutbox`) na mesma transação da mudança e enviado por um worker dentro do app a cada ~10 s. Falhas passageiras são repetidas (1 min, 5 min, 30 min, 2 h); na 5ª falha, ou numa falha definitiva, o aviso fica `Failed` e é auditado.
+- Avisos entre 22:00 e 08:00 (Brasília) saem às 08:00; códigos saem na hora.
+- Aluno sem celular confirmado (ou sem conta) não recebe aviso: a linha fica `Failed` com `sem-celular`.
+- **Esqueci minha senha** (`/esqueci-senha` → `/nova-senha`): código no celular confirmado da conta (no personal, o `--phone` do provisionamento). A resposta é a mesma exista ou não a conta (D-058).
+- Configuração do worker: `Notifications:Worker:Enabled`, `PollInterval` (padrão `00:00:10`), `BatchSize` (20) e `Lease` (`00:02:00`).
+
+### Configurar WhatsApp
+
+**Desenvolvimento (padrão):** `WhatsApp:Provider = Log`. Nada é enviado; o log mostra o template, os parâmetros (inclusive o código) e o link do botão, com o celular mascarado:
+
+```text
+WhatsApp (provider Log) ph_codigo para +55•••••••2468: [482913] botão  (log.…)
+```
+
+O código dos testes manuais (convite, senha, confirmar celular) sai desse log. Em Development, sem `PhoneVerification:HashKey`, cada execução sorteia uma chave: códigos pedidos antes de reiniciar o app deixam de valer.
+
+**Meta (WhatsApp Cloud API):**
+
+1. Na Meta for Developers, crie (ou use) o app com o produto **WhatsApp** e anote o **Phone number ID** e o **App secret** (Configurações do app → Básico). Gere um **token de acesso permanente** de um usuário do sistema com as permissões `whatsapp_business_messaging` e `whatsapp_business_management`.
+2. Cadastre e aguarde a **aprovação dos 9 templates** de `WHATSAPP_TEMPLATES.md` (idioma Português (BR)). Antes disso, os envios falham com `meta:132001`.
+3. Configure os segredos (nunca no repositório):
+
+```bash
+dotnet user-secrets set "WhatsApp:Provider" "Meta" --project src/PersonalHub.Web
+```
+
+```bash
+dotnet user-secrets set "WhatsApp:PhoneNumberId" "SEU_PHONE_NUMBER_ID" --project src/PersonalHub.Web
+```
+
+```bash
+dotnet user-secrets set "WhatsApp:AccessToken" "SEU_TOKEN" --project src/PersonalHub.Web
+```
+
+```bash
+dotnet user-secrets set "WhatsApp:AppSecret" "SEU_APP_SECRET" --project src/PersonalHub.Web
+```
+
+```bash
+dotnet user-secrets set "WhatsApp:WebhookVerifyToken" "UM_TEXTO_ALEATORIO" --project src/PersonalHub.Web
+```
+
+```bash
+dotnet user-secrets set "PhoneVerification:HashKey" "$(openssl rand -base64 32)" --project src/PersonalHub.Web
+```
+
+   Fora de Development, use as variáveis de ambiente equivalentes (`WhatsApp__AccessToken`, `PhoneVerification__HashKey` etc.). `WhatsApp:ApiVersion` tem padrão `v23.0`. Com `Provider = Meta`, o app não sobe sem `PhoneNumberId` e `AccessToken`; em Production, `Provider = Log` não é aceito e `PhoneVerification:HashKey` é obrigatória fora de Development. Trocar a `HashKey` invalida só os códigos pendentes.
+4. **Webhook** (entregue/lido/falhou): em WhatsApp → Configuração, informe a URL `https://<App:PublicBaseUrl>/webhooks/whatsapp`, o mesmo `WebhookVerifyToken` e assine o campo **messages**. A Meta exige HTTPS público (em desenvolvimento, um túnel como `ngrok`/`cloudflared`). Sem `WhatsApp:AppSecret`, o endpoint responde 404.
+5. **Número de teste da Meta:** envia só para até 5 números cadastrados como destinatários de teste no painel, e só templates aprovados. Use-o enquanto a conta empresarial não estiver verificada/liberada; para enviar a qualquer aluno, é preciso um número próprio registrado e a conta liberada (verificação da empresa e limites de envio da Meta).
 
 ## Autorização
 
-Toda rota exige login por padrão (`FallbackPolicy`). Uma página nova sem atributo fica protegida; as públicas precisam de `[AllowAnonymous]` explícito: `/`, `/entrar`, `/convite/{token}`, `/termos`, `/privacidade`, `/Error`, `/not-found`, `/health`, `POST /sair` e os arquivos estáticos. O teste `AuthorizationPolicyTests` falha se uma rota pública nova aparecer fora dessa lista.
+Toda rota exige login por padrão (`FallbackPolicy`). Uma página nova sem atributo fica protegida; as públicas precisam de `[AllowAnonymous]` explícito: `/`, `/entrar`, `/convite/{token}`, `/esqueci-senha`, `/nova-senha`, `/webhooks/whatsapp`, `/termos`, `/privacidade`, `/Error`, `/not-found`, `/health`, `POST /sair` e os arquivos estáticos. O teste `AuthorizationPolicyTests` falha se uma rota pública nova aparecer fora dessa lista.
 
 As páginas do personal usam a policy `ActivePersonal`: role `Personal` **e** perfil ativo no banco, conferido a cada requisição. Um personal desativado com o cookie ainda válido tem a sessão encerrada e volta para `/entrar`.
 
 ## Configuração de produção
 
-Fora de Development, dois valores são obrigatórios (variáveis de ambiente ou o serviço de segredos da hospedagem; nada disso vai para o repositório):
+Fora de Development, estes valores são obrigatórios (variáveis de ambiente ou o serviço de segredos da hospedagem; nada disso vai para o repositório):
 
 | Chave | Variável de ambiente | Exemplo | Para quê |
 | --- | --- | --- | --- |
 | `App:PublicBaseUrl` | `App__PublicBaseUrl` | `https://app.exemplo.com` | Endereço público usado nos links enviados para fora, como o do convite. URL `https` absoluta, sem caminho. |
 | `AllowedHosts` | `AllowedHosts` | `app.exemplo.com` | Hosts aceitos pela aplicação (separados por `;`). |
+| `PhoneVerification:HashKey` | `PhoneVerification__HashKey` | (32 bytes em base64) | Chave do HMAC dos códigos do WhatsApp. |
+| `WhatsApp:*` | `WhatsApp__PhoneNumberId`, `WhatsApp__AccessToken`, … | | Provider `Meta` e credenciais (seção "Configurar WhatsApp"). `appsettings.Production.json` já define `Provider = Meta`. |
 
 - Sem `App:PublicBaseUrl` válida, a aplicação **não sobe** (erro na inicialização citando a chave). O link do convite nunca usa o header `Host` da requisição, que o cliente controla.
 - `appsettings.Production.json` traz `AllowedHosts` com o placeholder `configure-o-dominio.invalid`. Se ele não for trocado, toda requisição recebe 400.

@@ -1,0 +1,195 @@
+@page "/aluno/confirmar-celular"
+@attribute [Authorize(Roles = AppRoles.Student)]
+@attribute [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(PhoneVerificationServiceCollectionExtensions.RateLimitPolicy)]
+@layout AuthLayout
+@using PersonalHub.Web.Features.Authentication
+@using PersonalHub.Web.Features.PhoneVerification
+@inject ConfirmPhoneHandler Handler
+@inject NavigationManager Navigation
+@inject TimeProvider Clock
+
+@* Aluno que aceitou o convite antes da Fase 6 (D-059). SSR estático: confirmar renova o cookie de login. *@
+
+<PageTitle>Confirme seu WhatsApp · PersonalHub</PageTitle>
+
+<div class="ph-auth ph-invite">
+    <header class="ph-auth-hero">
+        <div class="ph-invite-inner">
+            <PhLogo />
+            <h1 class="ph-auth-hero-title">Confirme seu WhatsApp</h1>
+            <p class="ph-auth-hero-text">Antes de continuar, confirme que este WhatsApp é seu. É por ele que chegam os avisos das aulas e pagamentos.</p>
+        </div>
+    </header>
+
+    <main class="ph-auth-main">
+        <div class="ph-invite-inner">
+            @if (_view is { HasPhone: false })
+            {
+                <div class="ph-alert ph-alert-warning" role="alert">
+                    <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+                    <p>Não encontramos um celular cadastrado para você. Fale com o seu personal ou com o suporte.</p>
+                </div>
+            }
+            else if (_view is not null)
+            {
+                <div class="ph-email-box ph-phone-box">
+                    <span>WhatsApp cadastrado pelo @_view.PersonalFirstName</span>
+                    <strong>@_view.MaskedPhone</strong>
+                </div>
+
+                @if (_message is not null)
+                {
+                    <div class="ph-alert @(_messageIsLock ? "ph-alert-warning" : "ph-alert-danger")" role="alert">
+                        <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+                        <p>@_message</p>
+                    </div>
+                }
+
+                @if (ShowCodeStep)
+                {
+                    <EditForm Model="Code" FormName="@CodeForm" OnSubmit="VerifyAsync" novalidate class="ph-form" data-ph-busy-form>
+                        <div class="ph-field">
+                            <label for="celular-codigo" class="ph-label">Código de 6 números</label>
+                            <p id="celular-codigo-ajuda" class="ph-field-hint">Enviamos pelo WhatsApp. Vale por 10 minutos.</p>
+                            <input id="celular-codigo" name="Code.Value" class="ph-input ph-code-input" inputmode="numeric"
+                                   autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" spellcheck="false"
+                                   aria-describedby="celular-codigo-ajuda" aria-invalid="@(_message is null ? "false" : "true")" />
+                        </div>
+                        <button type="submit" class="ph-btn ph-btn-primary ph-btn-block" data-ph-busy-text="Confirmando…"
+                                disabled="@(LockedSeconds > 0)">
+                            <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <span class="ph-btn-text">Confirmar código</span>
+                        </button>
+                    </EditForm>
+
+                    <form method="post" @formname="@SendForm" @onsubmit="SendAsync" class="ph-resend" data-ph-busy-form>
+                        <AntiforgeryToken />
+                        <PhoneCodeResendButton Seconds="ResendSeconds" Locked="LockedSeconds > 0" />
+                    </form>
+                }
+                else
+                {
+                    <p class="ph-consent">@PhoneCodeDisplay.Consent</p>
+                    <form method="post" @formname="@SendForm" @onsubmit="SendAsync" class="ph-form" data-ph-busy-form>
+                        <AntiforgeryToken />
+                        <button type="submit" class="ph-btn ph-btn-primary ph-btn-block" data-ph-busy-text="Enviando…"
+                                disabled="@(LockedSeconds > 0)">
+                            <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            <span class="ph-btn-text">Enviar código pelo WhatsApp</span>
+                        </button>
+                    </form>
+                }
+
+                <p class="ph-auth-note">Esse não é o seu número? Peça ao @_view.PersonalFirstName para corrigir o seu celular.</p>
+            }
+
+            @* POST com antiforgery, como no cabeçalho das áreas logadas. *@
+            <form method="post" action="/sair" class="ph-link-form">
+                <AntiforgeryToken />
+                <button type="submit" class="ph-link-button">Sair</button>
+            </form>
+        </div>
+    </main>
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = CodeForm)]
+    private PhoneCodeInput Code { get; set; } = default!;
+
+    private const string SendForm = "enviar-codigo";
+    private const string CodeForm = "confirmar-codigo";
+
+    private ConfirmPhoneView? _view;
+    private string? _postedForm;
+    private string? _message;
+    private bool _messageIsLock;
+    private Guid _userId;
+
+    private DateTime Now => Clock.GetUtcNow().UtcDateTime;
+    private int ResendSeconds => PhoneCodeDisplay.SecondsUntil(_view?.Code?.ResendAtUtc, Now);
+    private int LockedSeconds => PhoneCodeDisplay.SecondsUntil(_view?.Code?.LockedUntilUtc, Now);
+
+    // Durante o despacho de um POST, o formulário enviado precisa estar na tela.
+    private bool ShowCodeStep => _postedForm switch
+    {
+        CodeForm => true,
+        _ => _view?.Code?.HasOpenCode == true
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        Code ??= new PhoneCodeInput();
+        _userId = CurrentUser.IdOf(HttpContext.User)!.Value;
+        _view = await Handler.GetAsync(_userId, HttpContext.RequestAborted);
+
+        if (_view.AlreadyConfirmed)
+        {
+            // Confirmado em outra sessão: só o cookie estava desatualizado.
+            await Handler.RefreshCookieAsync(_userId);
+            Navigation.NavigateTo(UserHome.Student);
+            return;
+        }
+
+        if (HttpMethods.IsPost(HttpContext.Request.Method) && HttpContext.Request.HasFormContentType)
+        {
+            var posted = (await HttpContext.Request.ReadFormAsync(HttpContext.RequestAborted))["_handler"].ToString();
+            _postedForm = posted is SendForm or CodeForm ? posted : null;
+        }
+
+        ShowLock(_view.Code?.LockedUntilUtc);
+    }
+
+    private async Task SendAsync()
+    {
+        _postedForm = null;
+        var result = await Handler.SendAsync(_userId, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+        _view = await Handler.GetAsync(_userId, HttpContext.RequestAborted);
+        if (result?.Outcome == PhoneCodeSendOutcome.Locked)
+        {
+            ShowLock(result.RetryAtUtc);
+        }
+    }
+
+    private async Task VerifyAsync()
+    {
+        _postedForm = null;
+        var result = await Handler.VerifyAsync(_userId, Code.Value, HttpContext.TraceIdentifier, HttpContext.RequestAborted);
+        if (result?.Outcome == PhoneCodeVerifyOutcome.Verified)
+        {
+            Navigation.NavigateTo(UserHome.Student);
+            return;
+        }
+
+        _view = await Handler.GetAsync(_userId, HttpContext.RequestAborted);
+        _message = null;
+        _messageIsLock = false;
+        switch (result?.Outcome)
+        {
+            case PhoneCodeVerifyOutcome.Wrong:
+                _message = PhoneCodeDisplay.Wrong(result.RemainingAttempts);
+                break;
+            case PhoneCodeVerifyOutcome.Locked:
+                ShowLock(result.LockedUntilUtc);
+                break;
+            case PhoneCodeVerifyOutcome.Expired:
+                _message = PhoneCodeDisplay.Expired + " Peça um código novo.";
+                break;
+            case PhoneCodeVerifyOutcome.Invalid:
+                _message = PhoneCodeDisplay.Invalid;
+                break;
+        }
+    }
+
+    private void ShowLock(DateTime? untilUtc)
+    {
+        if (untilUtc > Now)
+        {
+            _message = PhoneCodeDisplay.Locked(untilUtc.Value, Now);
+            _messageIsLock = true;
+        }
+    }
+}

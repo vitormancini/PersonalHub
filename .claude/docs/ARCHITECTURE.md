@@ -45,7 +45,7 @@ src/
     Infrastructure/
       Persistence/
       Identity/
-      WhatsApp/
+      WhatsApp/           (adapter Meta/Log, opções, webhook)
       BackgroundJobs/
     wwwroot/
       css/
@@ -109,7 +109,28 @@ O adapter deve:
 - validar autenticidade de webhooks;
 - não registrar payload sensível em logs.
 
-Não assumir que WhatsApp está disponível em desenvolvimento sem configurar sandbox/provedor. Criar adapter fake para testes.
+**Implementação (Fase 6, D-055 a D-062):**
+
+```text
+Handler (transação) ──► NotificationOutbox (Pending, IdempotencyKey única)
+                                  │
+NotificationWorker (a cada ~10 s) │  ClaimAsync: FOR UPDATE SKIP LOCKED → Processing + lease (2 min), Attempts+1
+                                  ▼
+                      NotificationDispatcher ──► IWhatsAppSender ──► Meta Cloud API / log
+                                  │
+                 Sent (ProviderMessageId) │ Pending + NextAttemptAtUtc (1 min, 5 min, 30 min, 2 h) │ Failed (auditado)
+                                  ▲
+       /webhooks/whatsapp (assinado) ── entregue / lido / falhou, por ProviderMessageId
+```
+
+- `Features/Notifications`: `NotificationOutboxWriter` (enfileira no mesmo `DbContext`, checa a chave antes do índice único), `BusinessNotifications` (um método por evento de negócio, chamado pelos handlers), `NotificationContacts` (quem recebe e em qual celular), `NotificationDispatcher` e `NotificationWorker`.
+- `Infrastructure/WhatsApp`: `IWhatsAppSender`; `MetaCloudWhatsAppSender` (HttpClient tipado, `POST /{ApiVersion}/{PhoneNumberId}/messages`, Bearer, template com parâmetros do corpo e do botão; erros 429/5xx/131000 e limites repetem, 131026/131031/132xxx/100 não); `LogWhatsAppSender` (padrão em Development; telefone mascarado); `WhatsAppOptions` validadas na partida; `WhatsAppWebhook`.
+- `Features/PhoneVerification`: `PhoneCodeService` (envio e conferência dos códigos), `ConfirmPhone` (alunos de antes da Fase 6 e o middleware `StudentPhoneGate`). `Features/PasswordReset`: `/esqueci-senha` e `/nova-senha`.
+- Escolha do adapter: `WhatsApp:Provider` = `Log` ou `Meta`. Testes trocam o adapter por um falso e chamam o dispatcher direto (`Notifications:Worker:Enabled = false`).
+- Horário de silêncio (22h–8h de São Paulo) aplicado ao agendar e ao reagendar; códigos (`IsAuthentication`) saem na hora e expiram com o código (`ExpiresAtUtc`).
+- Um processo que cai no meio do envio deixa a linha em `Processing`; quando o lease vence, outra rodada a retoma. A tentativa é contada ao pegar a linha. Resultado gravado com `xmin`: se outra instância retomou a linha, o resultado atrasado é descartado.
+- Possível duplicata residual: a Meta não aceita chave de idempotência; se o processo cair depois de a Meta aceitar e antes de gravar `Sent`, a retomada envia de novo. Aceito no MVP (janela de segundos).
+- Métricas: por enquanto, logs estruturados por rodada (reivindicados, enviados, reagendados, falhos) e `LastError` sanitizado na outbox.
 
 ## 7. Agendamento de vencimentos
 

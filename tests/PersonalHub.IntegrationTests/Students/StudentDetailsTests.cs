@@ -28,7 +28,7 @@ public sealed class StudentDetailsTests(DatabaseFixture fixture) : IAsyncLifetim
     [Fact]
     public async Task Details_OfInvitedStudent_ShowsInviteCardContactAndBilling()
     {
-        var invite = await _factory.CreateInviteAsync(_personal.Account.Id);
+        var invite = await _factory.CreateInviteAsync(_personal.Account.Id, phone: "11987654321");
 
         var page = await _personal.Client.GetAsync(Details(invite.PersonalStudentId));
         var html = await page.TextAsync();

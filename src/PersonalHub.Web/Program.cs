@@ -6,11 +6,16 @@ using PersonalHub.Web.Features.Authentication.ProvisionPersonal;
 using PersonalHub.Web.Features.Billing;
 using PersonalHub.Web.Features.Billing.CloseBilling;
 using PersonalHub.Web.Features.Lessons;
+using PersonalHub.Web.Features.Notifications;
+using PersonalHub.Web.Features.PhoneVerification;
+using PersonalHub.Web.Features.PhoneVerification.ConfirmPhone;
+using PersonalHub.Web.Features.PasswordReset;
 using PersonalHub.Web.Features.Students;
 using PersonalHub.Web.Infrastructure.Hosting;
 using PersonalHub.Web.Infrastructure.Identity;
 using PersonalHub.Web.Infrastructure.Observability;
 using PersonalHub.Web.Infrastructure.Persistence;
+using PersonalHub.Web.Infrastructure.WhatsApp;
 
 // Comando administrativo (D-027): roda e encerra sem iniciar o servidor web.
 if (ProvisionPersonalCommand.IsInvoked(args))
@@ -28,6 +33,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddObservability();
 builder.AddPublicUrls();
+builder.AddWhatsApp();
+builder.AddPhoneVerification();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -40,6 +47,9 @@ builder.Services.AddScoped<LoginHandler>();
 builder.Services.AddStudents();
 builder.Services.AddLessons();
 builder.Services.AddBilling(builder.Configuration);
+builder.Services.AddNotifications(builder.Configuration);
+builder.Services.AddPasswordReset();
+builder.Services.AddScoped<ConfirmPhoneHandler>();
 builder.Services.AddSingleton(TimeProvider.System);
 
 var app = builder.Build();
@@ -58,6 +68,8 @@ app.UseHttpsRedirection();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+// Aluno sem celular confirmado vai para a confirmação antes de usar a área do aluno (D-059).
+app.UseStudentPhoneGate();
 app.UseAntiforgery();
 
 // Toda rota exige login por padrão (FallbackPolicy). As públicas são marcadas com AllowAnonymous.
@@ -66,6 +78,7 @@ app.MapHealthChecks("/health").AllowAnonymous();
 
 app.MapStaticAssets().AllowAnonymous();
 app.MapLogout();
+app.MapWhatsAppWebhook();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .Add(endpoint =>

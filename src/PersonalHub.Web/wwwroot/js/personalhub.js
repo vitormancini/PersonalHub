@@ -180,3 +180,25 @@ document.addEventListener('click', (event) => {
     field.value = button.dataset.phFillValue;
     field.focus();
 });
+
+// Contagem regressiva do "Reenviar código": <button disabled data-ph-countdown="45" data-ph-countdown-label="...">.
+// O servidor calcula os segundos e continua sendo quem decide (reenviar cedo demais só reapresenta a tela). Um
+// intervalo único serve também às páginas trocadas pela navegação aprimorada do Blazor.
+setInterval(() => {
+    document.querySelectorAll('[data-ph-countdown]').forEach((button) => {
+        if (!button.dataset.phCountdownEnd) {
+            button.dataset.phCountdownEnd = String(Date.now() + Number(button.dataset.phCountdown) * 1000);
+        }
+
+        const left = Math.ceil((Number(button.dataset.phCountdownEnd) - Date.now()) / 1000);
+        const label = button.querySelector('.ph-btn-text');
+        if (left <= 0) {
+            label.textContent = button.dataset.phCountdownLabel;
+            button.removeAttribute('data-ph-countdown');
+            button.disabled = false;
+            return;
+        }
+
+        label.textContent = `${button.dataset.phCountdownLabel} em ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    });
+}, 1000);

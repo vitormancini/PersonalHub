@@ -127,6 +127,7 @@ public class ObservabilityTests
             // Obrigatórios em Production (appsettings.Production.json traz só placeholders).
             builder.UseSetting(TestApp.PublicBaseUrlKey, TestApp.PublicBaseUrl);
             builder.UseSetting("AllowedHosts", "localhost");
+            TestApp.ApplyRequiredSecrets(builder);
 
             builder.ConfigureServices(services =>
             {

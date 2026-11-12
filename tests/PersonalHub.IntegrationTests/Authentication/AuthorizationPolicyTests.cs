@@ -26,6 +26,9 @@ public sealed class AuthorizationPolicyTests(DatabaseFixture fixture) : IAsyncLi
         "/Error",
         "/not-found",
         "/health",
+        "/esqueci-senha",
+        "/nova-senha",
+        "/webhooks/whatsapp",
         "/_framework/opaque-redirect"
     ];
 

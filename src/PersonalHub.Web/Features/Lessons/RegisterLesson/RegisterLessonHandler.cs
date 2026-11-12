@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PersonalHub.Web.Domain.Lessons;
 using PersonalHub.Web.Domain.Students;
+using PersonalHub.Web.Features.Notifications;
 using PersonalHub.Web.Features.Students;
 using PersonalHub.Web.Infrastructure.Persistence;
 
@@ -92,6 +93,7 @@ public sealed partial class RegisterLessonHandler(AppDbContext db, TimeProvider 
         db.Lessons.Add(lesson);
         db.AddLessonAudit(command.PersonalUserId, "LessonRegistered", lesson.Id, now, command.CorrelationId,
             new { personalStudentId = link.Id, unitPrice = lesson.UnitPrice, duplicateConfirmed = confirmed });
+        await db.LessonCreatedAsync(lesson, now, cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
