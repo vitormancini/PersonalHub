@@ -510,19 +510,35 @@ namespace PersonalHub.Web.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DeliveredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeliveryStatus")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<string>("EventType")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("IdempotencyKey")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<bool>("IsAuthentication")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("LastError")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("LeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("NextAttemptAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -532,14 +548,17 @@ namespace PersonalHub.Web.Infrastructure.Persistence.Migrations
                         .HasColumnType("jsonb");
 
                     b.Property<string>("ProviderMessageId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("ReadAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("RecipientPhone")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<Guid>("RecipientUserId")
+                    b.Property<Guid?>("RecipientUserId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("SentAtUtc")
@@ -561,6 +580,10 @@ namespace PersonalHub.Web.Infrastructure.Persistence.Migrations
                     b.HasIndex("IdempotencyKey")
                         .IsUnique();
 
+                    b.HasIndex("ProviderMessageId")
+                        .IsUnique()
+                        .HasFilter("\"ProviderMessageId\" IS NOT NULL");
+
                     b.HasIndex("RecipientUserId");
 
                     b.HasIndex("Status", "NextAttemptAtUtc");
@@ -571,9 +594,89 @@ namespace PersonalHub.Web.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_NotificationOutbox_Channel", "\"Channel\" IN ('WhatsApp')");
 
+                            t.HasCheckConstraint("CK_NotificationOutbox_DeliveryStatus", "\"DeliveryStatus\" IS NULL OR \"DeliveryStatus\" IN ('Sent', 'Delivered', 'Read', 'Failed')");
+
+                            t.HasCheckConstraint("CK_NotificationOutbox_Lease", "\"Status\" <> 'Processing' OR \"LeaseExpiresAtUtc\" IS NOT NULL");
+
                             t.HasCheckConstraint("CK_NotificationOutbox_RecipientPhone_E164", "\"RecipientPhone\" IS NULL OR \"RecipientPhone\" ~ '^\\+[1-9][0-9]{7,14}$'");
 
+                            t.HasCheckConstraint("CK_NotificationOutbox_Sent", "\"Status\" <> 'Sent' OR \"SentAtUtc\" IS NOT NULL");
+
                             t.HasCheckConstraint("CK_NotificationOutbox_Status", "\"Status\" IN ('Pending', 'Processing', 'Sent', 'Failed')");
+                        });
+                });
+
+            modelBuilder.Entity("PersonalHub.Web.Domain.PhoneVerification.PhoneVerificationCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<byte[]>("CodeHash")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTime?>("ConsumedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LockedUntilUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PersonalStudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PhoneE164")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<DateTime?>("ReplacedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PersonalStudentId", "CreatedAtUtc")
+                        .HasFilter("\"PersonalStudentId\" IS NOT NULL");
+
+                    b.HasIndex("PhoneE164", "Purpose", "CreatedAtUtc");
+
+                    b.HasIndex("UserId", "Purpose", "CreatedAtUtc")
+                        .HasFilter("\"UserId\" IS NOT NULL");
+
+                    b.ToTable("PhoneVerificationCode", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PhoneVerificationCode_Attempts", "\"Attempts\" BETWEEN 0 AND 5");
+
+                            t.HasCheckConstraint("CK_PhoneVerificationCode_Hash", "octet_length(\"CodeHash\") = 32");
+
+                            t.HasCheckConstraint("CK_PhoneVerificationCode_Phone_E164", "\"PhoneE164\" ~ '^\\+[1-9][0-9]{7,14}$'");
+
+                            t.HasCheckConstraint("CK_PhoneVerificationCode_Purpose", "\"Purpose\" IN ('InviteAcceptance', 'PhoneConfirmation', 'PasswordReset')");
+
+                            t.HasCheckConstraint("CK_PhoneVerificationCode_Scope", "(\"Purpose\" = 'InviteAcceptance' AND \"PersonalStudentId\" IS NOT NULL AND \"UserId\" IS NULL) OR (\"Purpose\" <> 'InviteAcceptance' AND \"UserId\" IS NOT NULL AND \"PersonalStudentId\" IS NULL)");
                         });
                 });
 
@@ -947,8 +1050,20 @@ namespace PersonalHub.Web.Infrastructure.Persistence.Migrations
                     b.HasOne("PersonalHub.Web.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("RecipientUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("PersonalHub.Web.Domain.PhoneVerification.PhoneVerificationCode", b =>
+                {
+                    b.HasOne("PersonalHub.Web.Domain.Students.PersonalStudent", null)
+                        .WithMany()
+                        .HasForeignKey("PersonalStudentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PersonalHub.Web.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("PersonalHub.Web.Domain.Students.PersonalProfile", b =>

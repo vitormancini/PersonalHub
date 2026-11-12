@@ -27,8 +27,13 @@ public static class TestApp
             builder.UseSetting("Authentication:LoginRateLimit:PermitLimit", "1000");
             builder.UseSetting("Students:InviteRateLimit:PermitLimit", "1000");
             builder.UseSetting(PublicBaseUrlKey, PublicBaseUrl);
+            ApplyRequiredSecrets(builder);
             // O fechamento automático fica desligado: os testes chamam o job diretamente.
             builder.UseSetting("Billing:Closing:Enabled", "false");
+            // O worker da outbox também: os testes chamam o dispatcher diretamente.
+            builder.UseSetting("Notifications:Worker:Enabled", "false");
+            builder.UseSetting("PhoneVerification:RateLimit:PermitLimit", "1000");
+            builder.UseSetting("WhatsApp:WebhookRateLimit:PermitLimit", "1000");
             foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
             {
                 builder.UseSetting(key, value);
@@ -39,6 +44,20 @@ public static class TestApp
                 builder.ConfigureLogging(logging => logging.AddProvider(logs));
             }
         });
+
+    /// <summary>Chave dos códigos de teste (base64 de 32 bytes fixos).</summary>
+    public const string PhoneCodeHashKey = "dGVzdGUtdGVzdGUtdGVzdGUtdGVzdGUtdGVzdGUtMTI=";
+
+    /// <summary>
+    /// Segredos exigidos fora de Development (Production nos testes de partida): chave dos códigos e credenciais
+    /// fictícias da Meta. Nenhum teste fala com a Meta: o worker fica desligado e os testes trocam o adapter.
+    /// </summary>
+    public static void ApplyRequiredSecrets(IWebHostBuilder builder)
+    {
+        builder.UseSetting("PhoneVerification:HashKey", PhoneCodeHashKey);
+        builder.UseSetting("WhatsApp:PhoneNumberId", "100000000000001");
+        builder.UseSetting("WhatsApp:AccessToken", "token-ficticio-de-teste");
+    }
 
     /// <summary>
     /// Cliente HTTPS (o cookie de login é Secure e só volta em HTTPS), com cookies e sem seguir

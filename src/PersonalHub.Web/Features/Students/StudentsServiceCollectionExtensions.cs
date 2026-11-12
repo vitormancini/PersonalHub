@@ -16,6 +16,7 @@ public static class StudentsServiceCollectionExtensions
         services.AddScoped<InviteCreatedQuery>();
         services.AddSingleton<CreatedInviteHandoff>();
         services.AddScoped<AcceptInviteHandler>();
+        services.AddSingleton<InvitePhoneProof>();
         services.AddInviteRateLimiting();
 
         services.AddScoped<ListStudentsQuery>();

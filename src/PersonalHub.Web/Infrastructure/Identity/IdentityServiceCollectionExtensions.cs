@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using PersonalHub.Web.Features.Authentication;
 using PersonalHub.Web.Features.Authentication.ActivePersonal;
@@ -13,6 +14,12 @@ public static partial class IdentityServiceCollectionExtensions
     public const int LockoutMaxFailedAttempts = 5;
     public static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
     public static readonly TimeSpan PersistentLoginDuration = TimeSpan.FromDays(14);
+
+    /// <summary>
+    /// De quanto em quanto tempo o cookie confere o security stamp no banco. Trocar a senha muda o stamp: as outras
+    /// sessões caem em até 1 minuto (D-058).
+    /// </summary>
+    public static readonly TimeSpan SecurityStampValidationInterval = TimeSpan.FromMinutes(1);
 
     /// <summary>
     /// Núcleo do Identity: usuários, roles, stores e políticas de senha e bloqueio. Usado pela aplicação web
@@ -41,7 +48,11 @@ public static partial class IdentityServiceCollectionExtensions
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<AppDbContext>()
-            .AddErrorDescriber<PortugueseIdentityErrorDescriber>();
+            .AddErrorDescriber<PortugueseIdentityErrorDescriber>()
+            .AddClaimsPrincipalFactory<AppClaimsPrincipalFactory>()
+            // Só o provedor do token de troca de senha, gerado no servidor depois do código do WhatsApp (D-058).
+            .AddTokenProvider<DataProtectorTokenProvider<ApplicationUser>>(TokenOptions.DefaultProvider);
+        services.AddDataProtection();
 
         return services;
     }
@@ -55,6 +66,8 @@ public static partial class IdentityServiceCollectionExtensions
 
         services.AddAuthentication(IdentityConstants.ApplicationScheme)
             .AddIdentityCookies();
+        services.Configure<SecurityStampValidatorOptions>(options =>
+            options.ValidationInterval = SecurityStampValidationInterval);
 
         services.ConfigureApplicationCookie(options =>
         {

@@ -47,6 +47,14 @@
             <EditForm Model="Input" FormName="login" OnSubmit="SubmitAsync" novalidate class="ph-form" data-ph-busy-form>
                 <DataAnnotationsValidator />
 
+                @if (PasswordChanged == "alterada" && _outcome is null)
+                {
+                    <div class="ph-alert ph-alert-success" role="status">
+                        <svg class="ph-alert-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10" /><path d="m8 12 3 3 5-6" /></svg>
+                        <p><strong>Senha alterada.</strong> Entre com a nova senha.</p>
+                    </div>
+                }
+
                 @if (_outcome == LoginOutcome.InvalidCredentials)
                 {
                     <div class="ph-alert ph-alert-danger" role="alert">
@@ -80,10 +88,13 @@
                     <ValidationMessage For="() => Input.Password" id="login-password-error" class="ph-field-error" />
                 </div>
 
-                <label class="ph-check">
-                    <InputCheckbox @bind-Value="Input.RememberMe" class="ph-check-input" />
-                    <span>Manter conectado</span>
-                </label>
+                <div class="ph-login-options">
+                    <label class="ph-check">
+                        <InputCheckbox @bind-Value="Input.RememberMe" class="ph-check-input" />
+                        <span>Manter conectado</span>
+                    </label>
+                    <a href="/esqueci-senha" class="ph-login-forgot">Esqueci minha senha</a>
+                </div>
 
                 <button type="submit" class="ph-btn ph-btn-primary ph-btn-block" data-ph-busy-text="Entrando…">
                     <span class="ph-btn-spinner spinner-border spinner-border-sm" aria-hidden="true"></span>
@@ -106,6 +117,10 @@
     // Preenchido pelo middleware de cookie ao barrar uma página protegida (/entrar?ReturnUrl=/personal).
     [SupplyParameterFromQuery(Name = "ReturnUrl")]
     private string? RequestedReturnUrl { get; set; }
+
+    // /entrar?senha=alterada, depois de trocar a senha pelo WhatsApp (D-058).
+    [SupplyParameterFromQuery(Name = "senha")]
+    private string? PasswordChanged { get; set; }
 
     private LoginOutcome? _outcome;
     private bool _redirecting;

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PersonalHub.IntegrationTests.Authentication;
 using PersonalHub.IntegrationTests.Infrastructure;
+using PersonalHub.IntegrationTests.Notifications;
 using PersonalHub.IntegrationTests.Observability;
 using PersonalHub.Web.Domain.Students;
 using PersonalHub.Web.Features.Students.AcceptInvite;
@@ -60,11 +61,32 @@ public sealed class AcceptInviteTests(DatabaseFixture fixture) : IAsyncLifetime
         return fields;
     }
 
-    private Task<HttpResponseMessage> AcceptNewAsync(HttpClient client, string token, Dictionary<string, string> fields) =>
-        client.PostFormAsync($"/convite/{token}", "nova-conta", fields);
+    /// <summary>Confirma o código do WhatsApp (D-057) e envia o formulário da conta nova com a prova.</summary>
+    private async Task<HttpResponseMessage> AcceptNewAsync(HttpClient client, string token, Dictionary<string, string> fields)
+    {
+        fields["New.PhoneProof"] = await ProofAsync(client, token);
+        return await client.PostFormAsync($"/convite/{token}", "nova-conta", fields);
+    }
 
-    private Task<HttpResponseMessage> AcceptExistingAsync(HttpClient client, string token, Dictionary<string, string> fields) =>
-        client.PostFormAsync($"/convite/{token}", "conta-existente", fields);
+    private async Task<HttpResponseMessage> AcceptExistingAsync(HttpClient client, string token, Dictionary<string, string> fields)
+    {
+        fields["Existing.PhoneProof"] = await ProofAsync(client, token);
+        return await client.PostFormAsync($"/convite/{token}", "conta-existente", fields);
+    }
+
+    // Uma prova por cliente e convite: vale 15 minutos para os reenvios do formulário (como no browser).
+    private readonly Dictionary<(HttpClient, string), string> _proofs = new();
+
+    private async Task<string> ProofAsync(HttpClient client, string token)
+    {
+        if (!_proofs.TryGetValue((client, token), out var proof))
+        {
+            proof = await client.VerifyInvitePhoneAsync(_factory, token);
+            _proofs[(client, token)] = proof;
+        }
+
+        return proof;
+    }
 
     [Fact]
     public async Task Page_ForValidInvite_ShowsPersonalEmailAndPrefilledName_WithNoReferrer()
@@ -76,14 +98,34 @@ public sealed class AcceptInviteTests(DatabaseFixture fixture) : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Personal Teste convidou você", html);
+        Assert.Contains("Primeiro, confirme que este WhatsApp é seu.", html);
+        Assert.Contains("WhatsApp cadastrado pelo Personal", html);
+        Assert.Contains("Enviar código pelo WhatsApp", html);
+        // Antes do código, nada do formulário da conta (nem o e-mail).
+        Assert.DoesNotContain(invite.Email, html);
+        Assert.DoesNotContain("Criar conta e entrar", html);
+        Assert.Equal("no-referrer", Assert.Single(response.Headers.GetValues("Referrer-Policy")));
+        Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
+    }
+
+    [Fact]
+    public async Task AfterCode_ShowsAccountFormWithEmailAndPrefilledName()
+    {
+        var invite = await _factory.CreateInviteAsync(_personal.Id);
+
+        await _client.PostFormAsync($"/convite/{invite.Token}", "enviar-codigo", new Dictionary<string, string>());
+        var code = await _factory.LatestCodeAsync(Web.Domain.PhoneVerification.PhoneCodePurpose.InviteAcceptance,
+            invite.PersonalStudentId);
+        var html = await (await _client.PostFormAsync($"/convite/{invite.Token}", "confirmar-codigo",
+            new Dictionary<string, string> { ["Code.Value"] = code })).TextAsync();
+
         Assert.Contains("Sua conta será criada com o e-mail", html);
         Assert.Contains(invite.Email, html);
         Assert.Contains("value=\"Mariana Lopes\"", html);
         Assert.Contains("Criar conta e entrar", html);
         Assert.Contains("href=\"/termos\"", html);
         Assert.Contains("href=\"/privacidade\"", html);
-        Assert.Equal("no-referrer", Assert.Single(response.Headers.GetValues("Referrer-Policy")));
-        Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
+        Assert.NotNull(NotificationTestHelpers.ProofIn(html));
     }
 
     [Fact]
@@ -161,7 +203,14 @@ public sealed class AcceptInviteTests(DatabaseFixture fixture) : IAsyncLifetime
         var student = await _factory.CreateAccountAsync(AppRoles.Student);
         var invite = await _factory.CreateInviteAsync(_personal.Id, email: student.Email.ToUpperInvariant());
 
-        var page = await (await _client.GetAsync($"/convite/{invite.Token}")).TextAsync();
+        // O formulário de login aparece depois do código do WhatsApp (D-057).
+        await _client.PostFormAsync($"/convite/{invite.Token}", "enviar-codigo", new Dictionary<string, string>());
+        var code = await _factory.LatestCodeAsync(Web.Domain.PhoneVerification.PhoneCodePurpose.InviteAcceptance,
+            invite.PersonalStudentId);
+        var verified = await _client.PostFormAsync($"/convite/{invite.Token}", "confirmar-codigo",
+            new Dictionary<string, string> { ["Code.Value"] = code });
+        var page = await verified.TextAsync();
+        _proofs[(_client, invite.Token)] = NotificationTestHelpers.ProofIn(await verified.Content.ReadAsStringAsync())!;
         Assert.Contains("Você já tem conta no PersonalHub. Entre com sua senha para aceitar o convite do Personal Teste.", page);
         Assert.Contains("Entrar e aceitar convite", page);
         Assert.DoesNotContain("Crie uma senha", page);
@@ -337,6 +386,7 @@ public sealed class AcceptInviteTests(DatabaseFixture fixture) : IAsyncLifetime
     public async Task ParallelAccepts_OnlyOneWins()
     {
         var invite = await _factory.CreateInviteAsync(_personal.Id);
+        var proof = await _factory.InviteProofAsync(invite.Token);
 
         var results = await Task.WhenAll(Enumerable.Range(0, 5).Select(async i =>
         {
@@ -350,7 +400,8 @@ public sealed class AcceptInviteTests(DatabaseFixture fixture) : IAsyncLifetime
                 Name = $"Tentativa {i}",
                 Password = NewPassword,
                 ConfirmPassword = NewPassword,
-                AcceptTerms = true
+                AcceptTerms = true,
+                PhoneProof = proof
             }, null, CancellationToken.None);
         }));
 
@@ -373,8 +424,11 @@ public sealed class AcceptInviteTests(DatabaseFixture fixture) : IAsyncLifetime
         var forms = new List<Dictionary<string, string>>();
         foreach (var client in clients)
         {
+            // Dois aparelhos com o celular confirmado (a prova não depende do aparelho).
+            var proof = await _factory.InviteProofAsync(invite.Token);
             var page = await client.GetAsync($"/convite/{invite.Token}");
             var form = NewAccountFields();
+            form["New.PhoneProof"] = proof;
             form["_handler"] = "nova-conta";
             form["__RequestVerificationToken"] = AuthTestHelpers.AntiforgeryToken(await page.Content.ReadAsStringAsync());
             forms.Add(form);
